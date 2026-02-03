@@ -1,0 +1,136 @@
+VUE GLOBAL: Serveurs peer to peer
+	
+	+------------------+           +-----------------+
+	| Serveur-client 1 | <-------> | Serveur-client2 | .....
+ 	+------------------+           +-----------------+
+ 	
+Le serveur peer to peer est un serveur ou le client peut etre a la fois client et serveur.
+Donc chaque client peut creer (host) ou rejoindre (Join) des sessions.
+
+
+LOGIQUE DE L'APPLICATION (schema):
+menu principale -> host -> ecrire les informations du serveur -> creation du serveur -> attends de nouveau client+affichage de l'arene
+    
+     		-> join -> choisir le serveur a se connecter -> Connexion TCP -> affichage de l'arene + mis a jour de l'arene en fonction des messages du serveur
+ 
+ 
+ORGANISATION DU PAQUET (pour le moment mais d'autre classe peuvent etre ajouter au fur et a mesure):
+ 
+arena_game/
+│
+├── vue/ (Vue + controlleur mitambatra)
+│   ├── Main.java
+│   ├── MainFrame.java
+│   ├── MainPanel.java
+│   ├── Hostform.java
+│   ├── HostGame.java
+│   ├── Clientform.java
+│   ├── ClientGame.java
+│   └── Arena.java
+│
+├── modele/
+│   ├── client/
+│   │   ├── Client.java
+│   │   └── Joueur.java
+│   │   	
+│   ├── server/
+│   │   └── GameServer.java
+│   │   
+│   └── common/
+│       └── Protocol.java
+│
+└── service/
+    └── ServerService.java
+    
+    
+    
+CONCEPTION:
+	-(ok) Main.java, MainFrame.java et MainPanel sont juste le menu principale;
+	
+	-(ok) Hostform.java:
+		-(ok) Formulaire pour la creation de session:
+			-(ok) Pseudo du joueur;
+			-(ok) IP de l'host;
+			-(ok) Limite du nombre de joueur;
+			
+		-(ok) Creation d'un serveur apres le click du Demarrer le serveur;
+		-(ok) Creation du client et joueur host;
+		-(ok) Affichage de HostGame.java;
+		
+	-(ok) HostGame.java:
+		-(ok) Affichage de Arena.java;
+		-(ok) Demarrage du serveur;
+		
+	-(ok) Arena.java:
+		-(ok) Prendre la liste de tous les joueurs et les dessiner avec l'arene;
+		
+		(en cours) (Plus tard, on ajoutera les fonctions pour le deplacement des joueurs)
+		
+	-(ok) Clientform.java:
+		-(ok) Formulaire pour le choix du serveur:
+			-(ok) Pseudo du joueur;
+			-(ok) Liste deroulante des serveurs disponibles (liste bidon pour le moment);
+			
+		-(ok) Creation d'un Gameserver pour mettre les donnees importants du client;
+		-(ok) Creation du joueur;
+		-(ok) Affichage de clientGame.java;
+		
+	-Clientgame.java:
+		-(ok) Affichage de Arena.java;
+		-(en cours) Connection au serveur; 
+		
+	-(ok) Client.java:
+		-(ok) Stocke les informations du joueur (1 client=1 joueur), son socket,...;
+		
+		-(ok) void run():
+			-(ok) recoit le message du serveur;
+			-(ok) met a jour l'etat du jeu;
+			-(ok) on envoie le message aux autres clients;
+			
+		-(ok) void send(message):
+			-(ok) envoie le message;
+			
+		-(ok) void readMessage(message):
+			-(ok) lis le message utilisae la methode correspondante;
+			
+		-(ok) void close():
+			-(ok) ferme proprement la connexion et enleve le client de la liste;
+			
+	-(ok) Joueur.java:
+		-(ok) information sur le joueur;
+		
+	-(ok) GameServer.java:
+		-(ok) stockage des socket, nombre joueurs max, liste des clients dans le serveur;
+		
+	-ServerService.java:
+		-(ok) GameServer createServer():
+			-(ok) creer une instance gameserver;
+			-(ok) creer le serversocket;
+			-(ok) stocker le serversocket dans gameServer;
+			-(ok) return gamserver; 
+			
+		-(ok) void startGameServer(gameserver, joueur):
+			-(ok) active l'executor:
+				tant que la fonction est en cours et que la liste des clients est encore <= aux limites du nombre de joueurs:
+					-(ok) on creer un socket;
+					-(ok) on creer un client;
+					-(ok) on ajoute le client a liste de gameserver;
+					-(ok) on activela fonction run dans le client;
+					
+		NB: ExecutorService est une classe qui permet de creer et de gerer des threads automaticament au lieu de creer manuellement les threads;
+		
+		
+A FAIRE:
+	-ajouter la fonction de connection au serveur par le client dans ServerService et l'appeler dans le ClientGame.java:
+		-se connecte au serveur;
+		-envoie constament les etats des joueurs au serveur; (on verra si on doit le mettre dans une fonction a part ou non);
+	
+	-afficher tous les joueurs dans l'arene de Host et ClientGame;
+	
+	-ajouter les fonctions pour deplacer un joueur;
+			
+			
+    
+    
+    
+

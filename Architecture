@@ -1,0 +1,39 @@
+Vue global:
+	+------------------+
+        |     Serveur      |
+        |  (Game Server)   |
+        +------------------+
+	       ↑   ↑    ↑
+             |   |   |
+      	+----+   |   +-------------+
+        |        |                 |
+ +-----------+ +-----------+ +-----------+
+ | Client 1  | | Client 2  | | Client 3  |
+ +-----------+ +-----------+ +-----------+
+ 
+ 
+Organisation du paquet:
+ 
+arena_game/
+│
+├── server/
+│   ├── GameServer.java: Ouvre le port(ServerSocket), accepte les connexions, crée un ClientHandler
+│   ├── ClientHandler.java: Gere un client specifique, reçoit les commandes (haut/bas/gauche/droite), transmet les commandes au serveur
+│   ├── GameLoop.java: Boucle du jeu (10 fois par seconde), met a jour l'état du jeu, Envoie l'état aux clients
+│   ├── GameState.java: Stocke l'état global(joueurs, positions, scores, carte)
+│   └── Player.java: représente un joueur (id, position(x,y), score)
+│
+├── client/
+│   ├── GameClient.java: Se connecte au serveur, lance les threads, démarre le jeu
+│   ├── NetworkListener.java: Ecoute les messages du serveur, met a jour l'affichage
+│   ├── InputHandler.java: Capture les entrées utilisateur, Envoie les actions au serveur
+│   └── Renderer.java: Affiche l'arene
+│
+└── common/
+    ├── MessageType.java: Définit tous les types de messages possibles dans le jeu
+    └── Protocol.java
+    
+    
+    
+menu->host -> ecrire les informations du serveur -> creation du serveur -> attends de nouveau client+affichage de l'arene
+    ->join -> choisir le serveur a se connecter -> Connexion TCP -> affichage de l'arene + mis a jour de l'arene en fonction des messages du serveur

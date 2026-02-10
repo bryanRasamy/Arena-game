@@ -175,6 +175,7 @@ public class Clientform extends JPanel {
         GameServer server=new GameServer();
 
         Joueur joueur=new Joueur();
+        joueur.setid((int)(Math.random() * 100) + 1);
         joueur.setPseudo(pseudo);
         joueur.setX((int)(Math.random() * (Arena.ARENA_WIDTH - Arena.PLAYER_SIZE)));
         joueur.setY((int)(Math.random() * (Arena.ARENA_HEIGHT - Arena.PLAYER_SIZE)));

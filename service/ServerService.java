@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 
 public class ServerService {
     private static ExecutorService executor=Executors.newCachedThreadPool();
@@ -33,8 +34,8 @@ public class ServerService {
                         Socket clientSocket = gameServer.getServeurSocket().accept();
                         System.out.println("Nouveau client connecte: " + clientSocket.getInetAddress());
 
-                        BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                        PrintWriter out = new PrintWriter(new OutputStreamWriter(clientSocket.getOutputStream()), true);
+                        BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), StandardCharsets.UTF_8));
+                        PrintWriter out = new PrintWriter(new OutputStreamWriter(clientSocket.getOutputStream(), StandardCharsets.UTF_8), true);
 
                         // Lire le message CONNECT du nouveau client
                         String connectMsg = in.readLine();
@@ -68,7 +69,7 @@ public class ServerService {
                                     + j.getY());
                             }
                         }
-                        out.println("STATE_END");
+                        out.println(Protocol.MSG_STATE_END);
 
                         // Diffuser JOINED a tous les clients distants existants
                         String joinedMsg = Protocol.MSG_PLAYER_JOINED + Protocol.SEPARATOR 
@@ -113,8 +114,8 @@ public class ServerService {
         executor.submit(() -> {
             try {
                 Socket socket = new Socket(Protocol.DEFAULT_SERVER_HOST, Protocol.SERVER_PORT);
-                PrintWriter out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true);
-                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                PrintWriter out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
 
                 // Envoyer le message CONNECT
                 out.println(Protocol.MSG_CONNECT + Protocol.SEPARATOR 
@@ -126,7 +127,7 @@ public class ServerService {
                 // Recevoir les joueurs existants (messages STATE jusqu'a STATE_END)
                 String line;
                 while ((line = in.readLine()) != null) {
-                    if (line.equals("STATE_END")) break;
+                    if (line.equals(Protocol.MSG_STATE_END)) break;
 
                     String[] parts = Protocol.parseMessage(line);
                     if (parts[0].equals(Protocol.MSG_GAME_STATE) && parts.length >= 5) {
@@ -163,7 +164,7 @@ public class ServerService {
                 }
 
             } catch (IOException e) {
-                System.err.println("Erreur de connexion: " + e.getMessage());
+                System.err.println("Erreur de connexion au serveur " + Protocol.DEFAULT_SERVER_HOST + ":" + Protocol.SERVER_PORT + " - " + e.getMessage());
             }
         });
     }

@@ -29,6 +29,8 @@ public class Protocol {
     public static final String MSG_PONG = "PONG";            // Réponse ping
     public static final String MSG_ERROR = "ERROR";          // Erreur
     
+    public static final String MSG_STATE_END = "STATE_END";  // Fin de l'envoi d'état
+    
     /*DIRECTIONS*/
     public static final String DIR_UP = "UP";
     public static final String DIR_DOWN = "DOWN";

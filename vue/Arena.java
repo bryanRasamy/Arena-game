@@ -9,9 +9,9 @@ import java.util.Vector;
 public class Arena extends JPanel {
     
     // Dimensions de l'arène (fixées dans Protocol)
-    private static final int ARENA_WIDTH = 800;
-    private static final int ARENA_HEIGHT = 600;
-    private static final int PLAYER_SIZE = 20;
+    public static final int ARENA_WIDTH = 800;
+    public static final int ARENA_HEIGHT = 600;
+    public static final int PLAYER_SIZE = 20;
     public static final float PLAYER_SPEED = 5.0f;
     
     // Liste des joueurs à afficher
@@ -116,7 +116,7 @@ public class Arena extends JPanel {
     }
 
     
-    /*Ajoute ou met à jour un joueur dans l'arène*/
+    /*Ajoute ou met à jour un joueur dans l'arène depuis un Client*/
     public void addPlayer(Client client) {
         synchronized (joueurs) {
             Joueur joueur = client.getJoueur();
@@ -128,41 +128,40 @@ public class Arena extends JPanel {
         }
         repaint();
     }
-    
+
+    /*Ajoute un joueur directement dans l'arène*/
+    public void addJoueur(Joueur joueur) {
+        synchronized (joueurs) {
+            joueurs.add(joueur);
+        }
+        repaint();
+    }
+
+    /*Définit l'ID du joueur local (pour le mettre en évidence)*/
+    public void setLocalPlayerId(int id) {
+        this.localPlayerId = id;
+        repaint();
+    }
+
     /*Met à jour la position d'un joueur*/
-    // public void updatePlayerPosition(int id, int x, int y) {
-    //     synchronized (players) {
-    //         PlayerDisplay player = players.get(id);
-    //         if (player != null) {
-    //             player.x = x;
-    //             player.y = y;
-    //         }
-    //     }
-    //     repaint();
-    // }
-    
-    // /*Retire un joueur de l'arène*/
-    // public void removePlayer(int id) {
-    //     synchronized (players) {
-    //         players.remove(id);
-    //     }
-    //     repaint();
-    // }
-    
-    // /*Met à jour tous les joueurs d'un coup (pour les mises à jour du serveur)*/
-    // public void updateAllPlayers(Map<Integer, PlayerDisplay> newPlayers) {
-    //     synchronized (players) {
-    //         players.clear();
-    //         players.putAll(newPlayers);
-    //     }
-    //     repaint();
-    // }
-    
-    // /*Efface tous les joueurs*/
-    // public void clearPlayers() {
-    //     synchronized (players) {
-    //         players.clear();
-    //     }
-    //     repaint();
-    // }
+    public void updateJoueur(Joueur updated) {
+        synchronized (joueurs) {
+            for (Joueur j : joueurs) {
+                if (j.getid() == updated.getid()) {
+                    j.setX(updated.getX());
+                    j.setY(updated.getY());
+                    break;
+                }
+            }
+        }
+        repaint();
+    }
+
+    /*Retire un joueur de l'arène*/
+    public void removeJoueur(int id) {
+        synchronized (joueurs) {
+            joueurs.removeIf(j -> j.getid() == id);
+        }
+        repaint();
+    }
 }

@@ -149,10 +149,11 @@ public class Hostform extends JPanel {
         server.setNombre_joueurs(maxPlayers);
 
         Joueur joueurHost=new Joueur();
-        joueurHost.setid((int)(Math.random() * 100) + 1);
+        joueurHost.setid((int)(Math.random() * 1000000) + 1);
         joueurHost.setPseudo(pseudo);
-        joueurHost.setX(50);
-        joueurHost.setY(50);
+        joueurHost.setIsHost(true);
+        joueurHost.setX((int)(Math.random() * (Arena.ARENA_WIDTH - Arena.PLAYER_SIZE)));
+        joueurHost.setY((int)(Math.random() * (Arena.ARENA_HEIGHT - Arena.PLAYER_SIZE)));
 
         Client clientHost=new Client();
         clientHost.setJoueur(joueurHost);

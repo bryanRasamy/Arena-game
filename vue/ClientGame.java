@@ -6,6 +6,7 @@ import javax.swing.*;
 import modele.client.Joueur;
 import modele.common.Protocol;
 import modele.server.GameServer;
+import service.ServerService;
 
 public class ClientGame extends JPanel {
     private MainFrame parentFrame;
@@ -33,9 +34,11 @@ public class ClientGame extends JPanel {
 
         // Centre : Arène
         arenaPanel = new Arena(server);
+        arenaPanel.addJoueur(joueurHost);
+        arenaPanel.setLocalPlayerId(joueurHost.getid());
         add(arenaPanel, BorderLayout.CENTER);
 
-        // TODO: Se connecter au serveur
+        // Se connecter au serveur
         connectToServer();
     }
 
@@ -77,10 +80,15 @@ public class ClientGame extends JPanel {
     }
 
     private void connectToServer() {
-        // TODO: Initialiser la connexion au serveur
         System.out.println("Connexion au serveur...");
         System.out.println("Pseudo: " + joueurHost.getPseudo());
         System.out.println("Serveur: " + Protocol.DEFAULT_SERVER_HOST + ":" + Protocol.SERVER_PORT);
+
+        ServerService.connectToServer(joueurHost, (joueur) -> {
+            SwingUtilities.invokeLater(() -> {
+                arenaPanel.addJoueur(joueur);
+            });
+        });
     }
 
     private void disconnect() {

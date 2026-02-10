@@ -7,6 +7,7 @@ import javax.swing.border.*;
 import modele.client.*;
 import modele.server.*;
 import modele.common.*;
+import service.*;
 
 public class HostGame extends JPanel {
     private MainFrame parentFrame;
@@ -164,11 +165,25 @@ public class HostGame extends JPanel {
     }
 
     private void startGameServer(GameServer gameServer) {
-        // TODO: Initialiser et démarrer le serveur de jeu
-        System.out.println("Démarrage du serveur...");
-        System.out.println("Hôte: " + joueurHost.getPseudo());
-        System.out.println("IP: " + Protocol.DEFAULT_SERVER_HOST + ":4018");
+        System.out.println("Demarrage du serveur...");
+        System.out.println("Hote: " + joueurHost.getPseudo());
+        System.out.println("IP: " + Protocol.DEFAULT_SERVER_HOST + ":" + Protocol.SERVER_PORT);
         System.out.println("Max joueurs: " + gameServer.getNombre_joueurs());
+
+        ServerService.startGameServer(gameServer, (newJoueur) -> {
+            SwingUtilities.invokeLater(() -> {
+                arenaPanel.addJoueur(newJoueur);
+            });
+            updatePlayerCount(gameServer.getclients().size(), gameServer.getNombre_joueurs());
+            StringBuilder sb = new StringBuilder();
+            for (Client c : gameServer.getclients()) {
+                Joueur j = c.getJoueur();
+                sb.append(j.getPseudo());
+                if (j.getIsHost()) sb.append(" (Hote)");
+                sb.append("\n");
+            }
+            updatePlayerList(sb.toString());
+        });
     }
 
     private void stopServer() {
@@ -179,8 +194,14 @@ public class HostGame extends JPanel {
             JOptionPane.WARNING_MESSAGE);
 
         if (confirm == JOptionPane.YES_OPTION) {
-            // TODO: Arrêter le serveur proprement
-            System.out.println("Arrêt du serveur...");
+            System.out.println("Arret du serveur...");
+            try {
+                if (gameServer.getServeurSocket() != null && !gameServer.getServeurSocket().isClosed()) {
+                    gameServer.getServeurSocket().close();
+                }
+            } catch (java.io.IOException e) {
+                e.printStackTrace();
+            }
             
             parentFrame.getContentPane().removeAll();
             parentFrame.add(new MainPanel(parentFrame), BorderLayout.CENTER);

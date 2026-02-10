@@ -13,6 +13,11 @@ public class Protocol {
     public static final int TICK_RATE = 10; // Mises à jour par seconde (10 Hz)
     public static final int TICK_DELAY_MS = 1000 / TICK_RATE;
     
+    // Arène
+    public static final int ARENA_WIDTH = 800;
+    public static final int ARENA_HEIGHT = 600;
+    public static final int PLAYER_SIZE = 20;
+    public static final float PLAYER_SPEED = 5.0f;
     
     /*TYPES DE MESSAGES*/
     // Client -> Serveur

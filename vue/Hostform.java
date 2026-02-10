@@ -67,7 +67,7 @@ public class Hostform extends JPanel {
 
         // Info port (non modifiable)
         gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2;
-        JLabel portInfo = new JLabel("Port utilisé : 4018 (par défaut)", JLabel.CENTER);
+        JLabel portInfo = new JLabel("Port utilisé : " + Protocol.SERVER_PORT + " (par défaut)", JLabel.CENTER);
         portInfo.setFont(new Font("Arial", Font.ITALIC, 12));
         portInfo.setForeground(new Color(150, 150, 150));
         formPanel.add(portInfo, gbc);
@@ -143,22 +143,15 @@ public class Hostform extends JPanel {
             return;
         }
 
-        //Creation et démarrage du serveur
-        Protocol.DEFAULT_SERVER_HOST=serverIP;
-        GameServer server=ServerService.createServer();
+        // Création et démarrage du serveur
+        Protocol.DEFAULT_SERVER_HOST = serverIP;
+        GameServer server = ServerService.createServer();
         server.setNombre_joueurs(maxPlayers);
 
-        Joueur joueurHost=new Joueur();
-        joueurHost.setid((int)(Math.random() * 100) + 1);
+        Joueur joueurHost = new Joueur();
         joueurHost.setPseudo(pseudo);
-        joueurHost.setX(50);
-        joueurHost.setY(50);
-
-        Client clientHost=new Client();
-        clientHost.setJoueur(joueurHost);
-        clientHost.setServer(server);
-        
-        server.getclients().add(clientHost);
+        joueurHost.setIsHost(true);
+        // La position sera assignée par ServerService.startGameServer
         
         // Lancer l'affichage hôte
         parentFrame.getContentPane().removeAll();

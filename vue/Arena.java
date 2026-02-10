@@ -3,16 +3,11 @@ package vue;
 import java.awt.*;
 import javax.swing.*;
 import modele.client.*;
+import modele.common.Protocol;
 import modele.server.GameServer;
 import java.util.Vector;
 
 public class Arena extends JPanel {
-    
-    // Dimensions de l'arène (fixées dans Protocol)
-    private static final int ARENA_WIDTH = 800;
-    private static final int ARENA_HEIGHT = 600;
-    private static final int PLAYER_SIZE = 20;
-    public static final float PLAYER_SPEED = 5.0f;
     
     // Liste des joueurs à afficher
     private Vector<Joueur> joueurs;
@@ -29,15 +24,18 @@ public class Arena extends JPanel {
     public Arena(GameServer gameServer) {
         joueurs = new Vector<>();
         
-        setPreferredSize(new Dimension(ARENA_WIDTH, ARENA_HEIGHT));
+        setPreferredSize(new Dimension(Protocol.ARENA_WIDTH, Protocol.ARENA_HEIGHT));
         setBackground(ARENA_BG);
         setFocusable(true);
 
+        // Ajouter tous les joueurs existants du serveur
         Vector<Client> clients = gameServer.getclients();
          
         for (Client client : clients) {
             addPlayer(client);
         }
+        
+        System.out.println("Arena créée avec " + joueurs.size() + " joueur(s)");
     }
 
     @Override
@@ -60,6 +58,9 @@ public class Arena extends JPanel {
         
         // Afficher les instructions
         drawInstructions(g2d);
+        
+        // Afficher le nombre de joueurs
+        drawPlayerCount(g2d);
     }
 
     private void drawGrid(Graphics2D g2d) {
@@ -67,13 +68,13 @@ public class Arena extends JPanel {
         int gridSize = 50;
         
         // Lignes verticales
-        for (int x = 0; x < ARENA_WIDTH; x += gridSize) {
-            g2d.drawLine(x, 0, x, ARENA_HEIGHT);
+        for (int x = 0; x < Protocol.ARENA_WIDTH; x += gridSize) {
+            g2d.drawLine(x, 0, x, Protocol.ARENA_HEIGHT);
         }
         
         // Lignes horizontales
-        for (int y = 0; y < ARENA_HEIGHT; y += gridSize) {
-            g2d.drawLine(0, y, ARENA_WIDTH, y);
+        for (int y = 0; y < Protocol.ARENA_HEIGHT; y += gridSize) {
+            g2d.drawLine(0, y, Protocol.ARENA_WIDTH, y);
         }
     }
 
@@ -86,17 +87,17 @@ public class Arena extends JPanel {
         }
         
         // Dessiner le joueur (carré)
-        g2d.fillRect(joueur.getX(), joueur.getY(), PLAYER_SIZE, PLAYER_SIZE);
+        g2d.fillRect(joueur.getX(), joueur.getY(), Protocol.PLAYER_SIZE, Protocol.PLAYER_SIZE);
         
         // Bordure
         g2d.setColor(Color.WHITE);
-        g2d.drawRect(joueur.getX(), joueur.getY(), PLAYER_SIZE, PLAYER_SIZE);
+        g2d.drawRect(joueur.getX(), joueur.getY(), Protocol.PLAYER_SIZE, Protocol.PLAYER_SIZE);
         
         // Afficher le pseudo au-dessus
         g2d.setFont(new Font("Arial", Font.BOLD, 11));
         FontMetrics fm = g2d.getFontMetrics();
         int textWidth = fm.stringWidth(joueur.getPseudo());
-        int textX = joueur.getX() + (PLAYER_SIZE - textWidth) / 2;
+        int textX = joueur.getX() + (Protocol.PLAYER_SIZE - textWidth) / 2;
         int textY = joueur.getY() - 5;
         
         // Ombre du texte
@@ -106,63 +107,121 @@ public class Arena extends JPanel {
         // Texte
         g2d.setColor(Color.WHITE);
         g2d.drawString(joueur.getPseudo(), textX, textY);
+        
+        // Afficher l'ID (pour debug)
+        g2d.setColor(Color.YELLOW);
+        g2d.setFont(new Font("Arial", Font.PLAIN, 9));
+        g2d.drawString("ID:" + joueur.getid(), joueur.getX(), joueur.getY() + Protocol.PLAYER_SIZE + 12);
     }
 
     private void drawInstructions(Graphics2D g2d) {
         g2d.setColor(new Color(150, 150, 150));
         g2d.setFont(new Font("Arial", Font.PLAIN, 11));
         String instructions = "Utilisez les flèches ou ZQSD pour vous déplacer";
-        g2d.drawString(instructions, 10, ARENA_HEIGHT - 10);
+        g2d.drawString(instructions, 10, Protocol.ARENA_HEIGHT - 10);
     }
 
-    
-    /*Ajoute ou met à jour un joueur dans l'arène*/
+    private void drawPlayerCount(Graphics2D g2d) {
+        g2d.setColor(new Color(150, 150, 150));
+        g2d.setFont(new Font("Arial", Font.BOLD, 12));
+        String count = "Joueurs: " + joueurs.size();
+        g2d.drawString(count, Protocol.ARENA_WIDTH - 100, 20);
+    }
+
+    /**
+     * Ajoute ou met à jour un joueur dans l'arène depuis un Client
+     */
     public void addPlayer(Client client) {
         synchronized (joueurs) {
             Joueur joueur = client.getJoueur();
-
-            joueurs.add(joueur);
+            
+            // Vérifier si le joueur existe déjà
+            boolean exists = false;
+            for (Joueur j : joueurs) {
+                if (j.getid() == joueur.getid()) {
+                    exists = true;
+                    break;
+                }
+            }
+            
+            // Ajouter seulement s'il n'existe pas
+            if (!exists) {
+                joueurs.add(joueur);
+                System.out.println("✓ Joueur ajouté à l'arène: " + joueur.getPseudo() + " (ID: " + joueur.getid() + ")");
+            }
+            
+            // Définir comme joueur local si c'est l'hôte
             if (joueur.getIsHost()) {
                 localPlayerId = joueur.getid();
+                System.out.println("✓ Joueur local défini: ID " + localPlayerId);
+            }
+        }
+        repaint();
+    }
+
+    /**
+     * Ajoute un joueur directement dans l'arène
+     */
+    public void addJoueur(Joueur joueur) {
+        synchronized (joueurs) {
+            // Vérifier si le joueur existe déjà
+            boolean exists = false;
+            for (Joueur j : joueurs) {
+                if (j.getid() == joueur.getid()) {
+                    exists = true;
+                    break;
+                }
+            }
+            
+            // Ajouter seulement s'il n'existe pas
+            if (!exists) {
+                joueurs.add(joueur);
+                System.out.println("✓ Joueur ajouté: " + joueur.getPseudo() + " à (" + joueur.getX() + ", " + joueur.getY() + ")");
             }
         }
         repaint();
     }
     
-    /*Met à jour la position d'un joueur*/
-    // public void updatePlayerPosition(int id, int x, int y) {
-    //     synchronized (players) {
-    //         PlayerDisplay player = players.get(id);
-    //         if (player != null) {
-    //             player.x = x;
-    //             player.y = y;
-    //         }
-    //     }
-    //     repaint();
-    // }
+    /**
+     * Définit l'ID du joueur local (pour le mettre en évidence)
+     */
+    public void setLocalPlayerId(int id) {
+        this.localPlayerId = id;
+        System.out.println("✓ ID joueur local: " + id);
+        repaint();
+    }
+
+    /**
+     * Met à jour la position d'un joueur
+     */
+    public void updateJoueur(Joueur updated) {
+        synchronized (joueurs) {
+            for (Joueur j : joueurs) {
+                if (j.getid() == updated.getid()) {
+                    j.setX(updated.getX());
+                    j.setY(updated.getY());
+                    break;
+                }
+            }
+        }
+        repaint();
+    }
+
+    /**
+     * Retire un joueur de l'arène
+     */
+    public void removeJoueur(int id) {
+        synchronized (joueurs) {
+            joueurs.removeIf(j -> j.getid() == id);
+            System.out.println("✓ Joueur retiré: ID " + id);
+        }
+        repaint();
+    }
     
-    // /*Retire un joueur de l'arène*/
-    // public void removePlayer(int id) {
-    //     synchronized (players) {
-    //         players.remove(id);
-    //     }
-    //     repaint();
-    // }
-    
-    // /*Met à jour tous les joueurs d'un coup (pour les mises à jour du serveur)*/
-    // public void updateAllPlayers(Map<Integer, PlayerDisplay> newPlayers) {
-    //     synchronized (players) {
-    //         players.clear();
-    //         players.putAll(newPlayers);
-    //     }
-    //     repaint();
-    // }
-    
-    // /*Efface tous les joueurs*/
-    // public void clearPlayers() {
-    //     synchronized (players) {
-    //         players.clear();
-    //     }
-    //     repaint();
-    // }
+    /**
+     * Retourne la liste des joueurs (pour debug)
+     */
+    public Vector<Joueur> getJoueurs() {
+        return joueurs;
+    }
 }

@@ -4,7 +4,9 @@ import java.io.*;
 import java.net.*;
 import java.util.Vector;
 
+import modele.common.Protocol;
 import modele.server.*;
+import vue.Arena;
 
 public class Client implements Runnable{
     private Socket socket;
@@ -12,9 +14,16 @@ public class Client implements Runnable{
     private BufferedReader in;
     private GameServer server;
     private Joueur joueur;
+    private Arena arena;
+    private boolean running;
     
-    public Client(){
+    public Client(Arena arena) {
+        this.arena = arena;
+        this.running = true;
+    }
 
+    public Client() {
+        this.running = true;
     }
 
     /*Setters */
@@ -24,6 +33,7 @@ public class Client implements Runnable{
             this.out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true);
             this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         } catch (IOException e) {
+            System.err.println("✗ Erreur lors de la création des flux: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -53,27 +63,112 @@ public class Client implements Runnable{
     public void run() {
         try {
             String message;
-
-            while ((message = in.readLine()) != null) {
-                //On met a jour les informations du joueur en fonction du message recu
-                readMessage(message);
-
-                Vector<Client> clients=server.getclients();
-
-                for (Client client : clients) {
-                    if (client != this) {
-                        client.send(message);
+            
+            while (running && (message = in.readLine()) != null) {
+                System.out.println("← Reçu: " + message.trim());
+                
+                // Si on a une arène (côté client), gérer les messages
+                if (arena != null) {
+                    handleMessage(message);
+                } else {
+                    // Sinon (côté serveur), broadcaster aux autres clients
+                    if (server != null) {
+                        broadcastMessage(message);
                     }
                 }
             }
             
         } catch (IOException e) {
-            System.out.println("Client déconnecté");
+            if (running) {
+                System.err.println("✗ Connexion perdue");
+            }
         } finally {
+            System.out.println("Arrêt du gestionnaire réseau");
             close();
         }
     }
-    
+
+    /**
+     * Traite les messages reçus du serveur (côté client)
+     */
+    private void handleMessage(String message) {
+        String[] parts = Protocol.parseMessage(message);
+        
+        if (parts.length == 0) return;
+        
+        String messageType = parts[0];
+        
+        switch (messageType) {
+            case Protocol.MSG_WELCOME:
+                // Message de bienvenue déjà traité dans connectToServer
+                break;
+                
+            case Protocol.MSG_PLAYER_JOINED:
+                // Format: JOINED|id|pseudo|x|y
+                if (parts.length >= 5) {
+                    Joueur nouveauJoueur = new Joueur();
+                    nouveauJoueur.setid(Integer.parseInt(parts[1]));
+                    nouveauJoueur.setPseudo(parts[2]);
+                    nouveauJoueur.setX(Integer.parseInt(parts[3]));
+                    nouveauJoueur.setY(Integer.parseInt(parts[4]));
+                    nouveauJoueur.setIsHost(false);
+                    
+                    arena.addJoueur(nouveauJoueur);
+                    System.out.println("✓ Nouveau joueur ajouté: " + nouveauJoueur.getPseudo());
+                }
+                break;
+                
+            case Protocol.MSG_GAME_STATE:
+                // Format: STATE|id1|x1|y1|id2|x2|y2|...
+                // Mise à jour complète de l'état du jeu
+                updateGameState(parts);
+                break;
+                
+            case Protocol.MSG_PLAYER_LEFT:
+                // Format: LEFT|id
+                if (parts.length >= 2) {
+                    int playerId = Integer.parseInt(parts[1]);
+                    arena.removeJoueur(playerId);
+                    System.out.println("✓ Joueur parti: ID " + playerId);
+                }
+                break;
+                
+            case Protocol.MSG_ERROR:
+                if (parts.length >= 2) {
+                    System.err.println("✗ Erreur serveur: " + parts[1]);
+                }
+                break;
+                
+            default:
+                System.out.println("⚠ Message non géré: " + messageType);
+                break;
+        }
+    }
+
+    /**
+     * Broadcast un message à tous les autres clients (côté serveur)
+     */
+    private void broadcastMessage(String message) {
+        if (server != null) {
+            for (Client client : server.getclients()) {
+                if (client != this && client.getSocket() != null) {
+                    client.send(message);
+                }
+            }
+        }
+    }
+
+    /**
+     * Met à jour l'état complet du jeu
+     */
+    private void updateGameState(String[] parts) {
+        // À implémenter plus tard pour la synchronisation complète
+        System.out.println("Mise à jour de l'état du jeu");
+    }
+
+    /**
+     * Envoie un message au serveur ou au client
+     */
     public void send(String message) {
         if (out != null) {
             out.println(message);
@@ -81,72 +176,26 @@ public class Client implements Runnable{
         }
     }
 
-    public void readMessage(String message){
-        try {
-            //Format: action|id_joueur|pseudo|x|y
-            String[] parts=message.split("\\|");
-            String action=parts[0];
-
-            Joueur joueur=new Joueur();
-            joueur.setid(Integer.parseInt(parts[1]));
-            joueur.setPseudo(parts[2]);
-            joueur.setX(Integer.parseInt(parts[3]));
-            joueur.setY(Integer.parseInt(parts[4]));
-
-            Vector<Client> clients=server.getclients();
-
-            if(action.equals("UPDATE")){
-                for (Client client : clients) {
-                    if (client.getJoueur().getid() == joueur.getid()) {
-                        client.setJoueur(joueur);
-                        break;
-                    }
-                }
-            }else if(action.equals("DISCONNECT")){
-                for (Client client : clients) {
-                    if (client.getJoueur().getid() == joueur.getid()) {
-                        server.getclients().remove(client);
-                        break;
-                    }
-                }
-            }
-
-            
-
-        } catch (Exception e) {
-            // TODO: handle exception
-        }
+    /**
+     * Arrête le gestionnaire réseau
+     */
+    public void stop() {
+        running = false;
     }
     
-    // public void sendPlayerData(Joueur data) {
-    //     try {
-    //         out.writeInt(data.id_joueur);
-    //         out.writeInt(data.x);
-    //         out.writeInt(data.y);
-    //         out.writeUTF(data.pseudo);
-    //         out.flush();
-    //     } catch (IOException e) {
-    //         e.printStackTrace();
-    //     }
-    // }
-    
-    // private Joueur receivePlayerData() throws IOException {
-    //     Joueur data = new Joueur();
-    //     data.id_joueur = in.readInt();
-    //     data.x = in.readInt();
-    //     data.y = in.readInt();
-    //     data.pseudo = in.readUTF();
-    //     return data;
-    // }
-    
+    /**
+     * Ferme proprement la connexion
+     */
     public void close() {
         try {
             if (socket != null && !socket.isClosed()) {
                 socket.close();
             }
-            server.getclients().remove(this);
+            if (server != null) {
+                server.getclients().remove(this);
+            }
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("✗ Erreur lors de la fermeture: " + e.getMessage());
         }
     }
 

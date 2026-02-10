@@ -58,8 +58,8 @@ public class Clientform extends JPanel {
         comboServers.setFont(new Font("Arial", Font.PLAIN, 14));
         
         // Ajouter des serveurs d'exemple (TODO: remplacer par scan réseau)
-        comboServers.addItem("127.0.0.1:4018 - Serveur Local");
-        comboServers.addItem("192.168.1.100:4018 - Serveur de test");
+        comboServers.addItem("127.0.0.1:" + Protocol.SERVER_PORT + " - Serveur Local");
+        comboServers.addItem("192.168.1.100:" + Protocol.SERVER_PORT + " - Serveur de test");
         
         btnRefresh = new JButton("🔄");
         btnRefresh.setFocusPainted(false);
@@ -133,9 +133,9 @@ public class Clientform extends JPanel {
         // TODO: Implémenter le scan des serveurs disponibles sur le réseau
         // Pour l'instant, on simule juste un refresh
         comboServers.removeAllItems();
-        comboServers.addItem("127.0.0.1:4018 - Serveur Local");
-        comboServers.addItem("192.168.1.100:4018 - Partie de test");
-        comboServers.addItem("10.111.236.81:4018 - Serveur distant");
+        comboServers.addItem("127.0.0.1:" + Protocol.SERVER_PORT + " - Serveur Local");
+        comboServers.addItem("192.168.1.100:" + Protocol.SERVER_PORT + " - Partie de test");
+        comboServers.addItem("10.111.236.81:" + Protocol.SERVER_PORT + " - Serveur distant");
         
         JOptionPane.showMessageDialog(this, 
             "Liste des serveurs actualisée !", 
@@ -170,14 +170,14 @@ public class Clientform extends JPanel {
         String serverIP = parts[0];
         int serverPort = Integer.parseInt(parts[1]);
 
-        Protocol.DEFAULT_SERVER_HOST=serverIP;
+        Protocol.DEFAULT_SERVER_HOST = serverIP;
+        Protocol.SERVER_PORT = serverPort;
 
-        GameServer server=new GameServer();
+        GameServer server = new GameServer();
 
-        Joueur joueur=new Joueur();
+        Joueur joueur = new Joueur();
         joueur.setPseudo(pseudo);
-        joueur.setX((int)(Math.random() * 1000) - 200 + 1);
-        joueur.setY((int)(Math.random() * 1000) - 400 + 1);
+        // La position sera assignée par le serveur
 
         // Lancer l'affichage client
         parentFrame.getContentPane().removeAll();

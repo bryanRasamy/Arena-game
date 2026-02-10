@@ -1,12 +1,15 @@
 package vue;
 
 import java.awt.*;
+import java.io.IOException;
+
 import javax.swing.*;
 import javax.swing.border.*;
 
 import modele.client.*;
 import modele.server.*;
 import modele.common.*;
+import service.ServerService;
 
 public class HostGame extends JPanel {
     private MainFrame parentFrame;
@@ -29,15 +32,15 @@ public class HostGame extends JPanel {
         setLayout(new BorderLayout());
         setBackground(new Color(30, 30, 30));
 
-        // Panel de gauche : Arène
-        arenaPanel = new Arena(this.gameServer);
+        // Panel de gauche : Arène (créée AVANT de démarrer le serveur)
+        arenaPanel = new Arena(new GameServer()); // Arena vide au début
         add(arenaPanel, BorderLayout.CENTER);
 
         // Panel de droite : Contrôles serveur 
         JPanel controlPanel = createControlPanel();
         add(controlPanel, BorderLayout.EAST);
 
-        // Démarrage du serveur
+        // Démarrage du serveur (passera l'arena pour y ajouter les joueurs)
         startGameServer(gameServer);
     }
 
@@ -66,9 +69,9 @@ public class HostGame extends JPanel {
         lblServerStatus = createInfoLabel("Serveur actif");
         lblServerStatus.setForeground(new Color(50, 205, 50));
         
-        lblServerInfo = createInfoLabel("IP: " + Protocol.DEFAULT_SERVER_HOST + ":4018");
+        lblServerInfo = createInfoLabel("IP: " + Protocol.DEFAULT_SERVER_HOST + ":" + Protocol.SERVER_PORT);
         
-        lblPlayerCount = createInfoLabel("Joueurs: 1/" + gameServer.getNombre_joueurs());
+        lblPlayerCount = createInfoLabel("Joueurs: 0/" + gameServer.getNombre_joueurs());
 
         infoPanel.add(lblServerStatus);
         infoPanel.add(Box.createRigidArea(new Dimension(0, 8)));
@@ -76,7 +79,7 @@ public class HostGame extends JPanel {
         infoPanel.add(Box.createRigidArea(new Dimension(0, 8)));
         infoPanel.add(lblPlayerCount);
 
-        // Liste des joueur
+        // Liste des joueurs
         JPanel playerListPanel = new JPanel(new BorderLayout());
         playerListPanel.setBackground(panel.getBackground());
         
@@ -90,8 +93,6 @@ public class HostGame extends JPanel {
         txtPlayerList.setBackground(new Color(50, 50, 50));
         txtPlayerList.setForeground(Color.WHITE);
         txtPlayerList.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        txtPlayerList.setText(joueurHost.getPseudo() + " (Hôte)\n");
-        
         
         JScrollPane scrollPane = new JScrollPane(txtPlayerList);
         scrollPane.setPreferredSize(new Dimension(260, 150));
@@ -100,7 +101,7 @@ public class HostGame extends JPanel {
         playerListPanel.add(playerListTitle, BorderLayout.NORTH);
         playerListPanel.add(scrollPane, BorderLayout.CENTER);
 
-        //Statistiques
+        // Statistiques
         JPanel statsPanel = new JPanel();
         statsPanel.setLayout(new BoxLayout(statsPanel, BoxLayout.Y_AXIS));
         statsPanel.setBackground(panel.getBackground());
@@ -164,11 +165,45 @@ public class HostGame extends JPanel {
     }
 
     private void startGameServer(GameServer gameServer) {
-        // TODO: Initialiser et démarrer le serveur de jeu
-        System.out.println("Démarrage du serveur...");
+        System.out.println("=== DÉMARRAGE DU SERVEUR ===");
         System.out.println("Hôte: " + joueurHost.getPseudo());
-        System.out.println("IP: " + Protocol.DEFAULT_SERVER_HOST + ":4018");
+        System.out.println("IP: " + Protocol.DEFAULT_SERVER_HOST + ":" + Protocol.SERVER_PORT);
         System.out.println("Max joueurs: " + gameServer.getNombre_joueurs());
+        
+        try {
+            // Passer l'arène au ServerService pour qu'il puisse y ajouter les joueurs
+            ServerService.startGameServer(gameServer, joueurHost, arenaPanel);
+            System.out.println("✓ Serveur démarré avec succès");
+            
+            // Timer pour mettre à jour l'affichage régulièrement
+            Timer updateTimer = new Timer(500, e -> {
+                updatePlayerListDisplay();
+                updatePlayerCount(gameServer.getclients().size(), gameServer.getNombre_joueurs());
+                arenaPanel.repaint();
+            });
+            updateTimer.start();
+            
+        } catch (IOException e) {
+            System.err.println("✗ Erreur lors du démarrage du serveur: " + e.getMessage());
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                "Erreur lors du démarrage du serveur:\n" + e.getMessage(),
+                "Erreur",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void updatePlayerListDisplay() {
+        StringBuilder playerList = new StringBuilder();
+        for (Client client : gameServer.getclients()) {
+            Joueur j = client.getJoueur();
+            playerList.append(j.getPseudo());
+            if (j.getIsHost()) {
+                playerList.append(" (Hôte)");
+            }
+            playerList.append("\n");
+        }
+        txtPlayerList.setText(playerList.toString());
     }
 
     private void stopServer() {
@@ -179,9 +214,18 @@ public class HostGame extends JPanel {
             JOptionPane.WARNING_MESSAGE);
 
         if (confirm == JOptionPane.YES_OPTION) {
-            // TODO: Arrêter le serveur proprement
-            System.out.println("Arrêt du serveur...");
+            System.out.println("=== ARRÊT DU SERVEUR ===");
             
+            // Fermer le serveur socket
+            try {
+                if (gameServer.getServeurSocket() != null && !gameServer.getServeurSocket().isClosed()) {
+                    gameServer.getServeurSocket().close();
+                }
+            } catch (IOException e) {
+                System.err.println("Erreur lors de la fermeture du serveur: " + e.getMessage());
+            }
+            
+            // Retour au menu
             parentFrame.getContentPane().removeAll();
             parentFrame.add(new MainPanel(parentFrame), BorderLayout.CENTER);
             parentFrame.revalidate();

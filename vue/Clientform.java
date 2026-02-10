@@ -176,8 +176,8 @@ public class Clientform extends JPanel {
 
         Joueur joueur=new Joueur();
         joueur.setPseudo(pseudo);
-        joueur.setX((int)(Math.random() * 1000) - 200 + 1);
-        joueur.setY((int)(Math.random() * 1000) - 400 + 1);
+        joueur.setX((int)(Math.random() * (Arena.ARENA_WIDTH - Arena.PLAYER_SIZE)));
+        joueur.setY((int)(Math.random() * (Arena.ARENA_HEIGHT - Arena.PLAYER_SIZE)));
 
         // Lancer l'affichage client
         parentFrame.getContentPane().removeAll();

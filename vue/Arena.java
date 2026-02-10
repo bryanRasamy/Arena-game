@@ -9,9 +9,9 @@ import java.util.Vector;
 public class Arena extends JPanel {
     
     // Dimensions de l'arène (fixées dans Protocol)
-    private static final int ARENA_WIDTH = 800;
-    private static final int ARENA_HEIGHT = 600;
-    private static final int PLAYER_SIZE = 20;
+    public static final int ARENA_WIDTH = 800;
+    public static final int ARENA_HEIGHT = 600;
+    public static final int PLAYER_SIZE = 20;
     public static final float PLAYER_SPEED = 5.0f;
     
     // Liste des joueurs à afficher

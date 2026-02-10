@@ -11,7 +11,6 @@ import service.ServerService;
 
 public class ClientGame extends JPanel {
     private MainFrame parentFrame;
-    private GameServer gameServer;
     private Joueur joueurLocal;
     private Client client;
     
@@ -25,7 +24,6 @@ public class ClientGame extends JPanel {
     public ClientGame(MainFrame parentFrame, Joueur joueurLocal, GameServer server) {
         this.parentFrame = parentFrame;
         this.joueurLocal = joueurLocal;
-        this.gameServer = server;
         
         setLayout(new BorderLayout());
         setBackground(new Color(30, 30, 30));
@@ -191,17 +189,15 @@ public class ClientGame extends JPanel {
         }
     }
 
-    /**
-     * Méthodes publiques pour mettre à jour l'interface depuis le client réseau
-     */
+    /*Méthodes publiques pour mettre à jour l'interface depuis le client réseau*/
     public void updateConnectionStatus(boolean connected) {
         SwingUtilities.invokeLater(() -> {
             if (connected) {
                 lblConnectionStatus.setText("Connecté");
-                lblConnectionStatus.setForeground(new Color(50, 205, 50)); // Vert
+                lblConnectionStatus.setForeground(new Color(50, 205, 50));
             } else {
                 lblConnectionStatus.setText("Déconnecté");
-                lblConnectionStatus.setForeground(new Color(220, 20, 60)); // Rouge
+                lblConnectionStatus.setForeground(new Color(220, 20, 60));
             }
         });
     }

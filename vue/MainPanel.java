@@ -16,14 +16,14 @@ public class MainPanel extends JPanel {
         setLayout(new BorderLayout());
         setBackground(new Color(30, 30, 30));
 
-        // ===== Titre =====
+        // Titre
         JLabel title = new JLabel("MENU PRINCIPAL", JLabel.CENTER);
         title.setFont(new Font("Arial", Font.BOLD, 18));
         title.setForeground(Color.WHITE);
         title.setBorder(BorderFactory.createEmptyBorder(20, 10, 20, 10));
         add(title, BorderLayout.NORTH);
 
-        // ===== Zone boutons =====
+        // Zone boutons
         JPanel controller = new JPanel();
         controller.setBackground(getBackground());
         controller.setLayout(new BoxLayout(controller, BoxLayout.Y_AXIS));

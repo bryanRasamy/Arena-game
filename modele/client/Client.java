@@ -4,8 +4,6 @@ import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Vector;
-
 import modele.common.Protocol;
 import modele.server.*;
 import vue.Arena;
@@ -115,9 +113,7 @@ public class Client implements Runnable{
         }
     }
 
-    /**
-     * Traite les messages reçus du serveur (côté client)
-     */
+    /*Traite les messages reçus du serveur (côté client)*/
     private void handleMessage(String message) {
         String[] parts = Protocol.parseMessage(message);
         
@@ -204,9 +200,7 @@ public class Client implements Runnable{
         hostArena = arena;
     }
     
-    /**
-     * Traite les messages reçus d'un client (côté serveur)
-     */
+    /*Traite les messages reçus d'un client (côté serveur)*/
     private void handleServerMessage(String message) {
         String[] parts = Protocol.parseMessage(message);
         if (parts.length == 0) return;
@@ -236,7 +230,7 @@ public class Client implements Runnable{
                         hostArena.updateJoueur(updated);
                     }
                 }
-                // Broadcaster à tous les autres clients (y compris l'hôte ne reçoit pas par socket)
+                // Broadcaster à tous les autres clients
                 broadcastMessage(message);
                 break;
                 
@@ -247,9 +241,7 @@ public class Client implements Runnable{
         }
     }
     
-    /**
-     * Broadcast un message à tous les autres clients (côté serveur)
-     */
+    /*Broadcast un message à tous les autres clients (côté serveur)*/
     private void broadcastMessage(String message) {
         if (server != null) {
             for (Client client : server.getclients()) {
@@ -260,17 +252,12 @@ public class Client implements Runnable{
         }
     }
 
-    /**
-     * Met à jour l'état complet du jeu
-     */
+    /*Met à jour l'état complet du jeu*/
     private void updateGameState(String[] parts) {
-        // À implémenter plus tard pour la synchronisation complète
         System.out.println("Mise à jour de l'état du jeu");
     }
 
-    /**
-     * Envoie un message au serveur ou au client
-     */
+    /*Envoie un message au serveur ou au client*/
     public void send(String message) {
         if (out != null) {
             out.println(message);
@@ -278,16 +265,12 @@ public class Client implements Runnable{
         }
     }
 
-    /**
-     * Arrête le gestionnaire réseau
-     */
+    /*Arrête le gestionnaire réseau*/
     public void stop() {
         running = false;
     }
     
-    /**
-     * Déclenche le callback de déconnexion (une seule fois)
-     */
+    /*Déclenche le callback de déconnexion (une seule fois)*/
     private void triggerDisconnect() {
         if (!disconnectHandled && onDisconnected != null && arena != null) {
             disconnectHandled = true;
@@ -295,9 +278,7 @@ public class Client implements Runnable{
         }
     }
     
-    /**
-     * Ferme proprement la connexion
-     */
+    /*Ferme proprement la connexion*/
     public void close() {
         try {
             if (socket != null && !socket.isClosed()) {
@@ -320,7 +301,6 @@ public class Client implements Runnable{
             
             // UN SEUL socket pour envoyer ET recevoir
             DatagramSocket socket = new DatagramSocket();
-            int localPort = socket.getLocalPort();
             
             socket.setSoTimeout(timeoutMs);
             
@@ -329,9 +309,7 @@ public class Client implements Runnable{
             // Envoyer requête multicast
             String message = "DISCOVER_GAME";
             byte[] buffer = message.getBytes();
-            DatagramPacket packet = new DatagramPacket(
-                buffer, buffer.length, group, Protocol.DISCOVERY_PORT
-            );
+            DatagramPacket packet = new DatagramPacket(buffer, buffer.length, group, Protocol.DISCOVERY_PORT);
             
             System.out.println("Envoi requête multicast...");
             socket.send(packet);

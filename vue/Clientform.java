@@ -59,24 +59,16 @@ public class Clientform extends JPanel {
         comboServers.addItem("Recherche en cours...");
         comboServers.setEnabled(false);
         
-        btnRefresh = new JButton("🔄");
+        btnRefresh = new JButton("Actualiser");
         btnRefresh.setFocusPainted(false);
         btnRefresh.setBackground(new Color(70, 130, 180));
         btnRefresh.setForeground(Color.WHITE);
-        btnRefresh.setPreferredSize(new Dimension(40, 25));
         btnRefresh.addActionListener(e -> refreshServerList());
+        
         
         serverPanel.add(comboServers, BorderLayout.CENTER);
         serverPanel.add(btnRefresh, BorderLayout.EAST);
         formPanel.add(serverPanel, gbc);
-
-        // Info
-        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2;
-        JLabel info = new JLabel("<html><center>Cliquez sur 🔄 pour actualiser<br>la liste des serveurs</center></html>", 
-                                  JLabel.CENTER);
-        info.setFont(new Font("Arial", Font.ITALIC, 11));
-        info.setForeground(new Color(150, 150, 150));
-        formPanel.add(info, gbc);
 
         add(formPanel, BorderLayout.CENTER);
 
@@ -84,7 +76,7 @@ public class Clientform extends JPanel {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 20));
         buttonPanel.setBackground(getBackground());
 
-        btnBack = createButton("Retour", new Color(100, 100, 100));
+        btnBack = createButton("Retour", new Color(100, 100, 100)); 
         btnConnect = createButton("Se connecter", new Color(34, 139, 34));
 
         btnBack.addActionListener(e -> goBack());
@@ -94,6 +86,8 @@ public class Clientform extends JPanel {
         buttonPanel.add(btnConnect);
 
         add(buttonPanel, BorderLayout.SOUTH);
+
+        refreshServerList();
     }
 
     private JLabel createLabel(String text) {

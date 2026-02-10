@@ -32,17 +32,17 @@ public class HostGame extends JPanel {
         setLayout(new BorderLayout());
         setBackground(new Color(30, 30, 30));
 
-        // Panel de gauche : Arène (créée AVANT de démarrer le serveur)
-        arenaPanel = new Arena(new GameServer()); // Arena vide au début
-        arenaPanel.setHostServer(gameServer); // Permettre à l'hôte d'envoyer les mouvements
-        Client.setHostArena(arenaPanel); // Pour que le serveur mette à jour l'arène de l'hôte
+        // Panel de gauche : Arène 
+        arenaPanel = new Arena(new GameServer());
+        arenaPanel.setHostServer(gameServer);       // Permettre à l'hôte d'envoyer les mouvements
+        Client.setHostArena(arenaPanel);            // Pour que le serveur mette à jour l'arène de l'hôte
         add(arenaPanel, BorderLayout.CENTER);
 
         // Panel de droite : Contrôles serveur 
         JPanel controlPanel = createControlPanel();
         add(controlPanel, BorderLayout.EAST);
 
-        // Démarrage du serveur (passera l'arena pour y ajouter les joueurs)
+        // Démarrage du serveur
         startGameServer(gameServer);
     }
 

@@ -42,8 +42,9 @@ public class Arena extends JPanel {
     public Arena(GameServer gameServer) {
         joueurs = new Vector<>();
         
+        setMinimumSize(new Dimension(Protocol.ARENA_WIDTH, Protocol.ARENA_HEIGHT));
         setPreferredSize(new Dimension(Protocol.ARENA_WIDTH, Protocol.ARENA_HEIGHT));
-        setBackground(ARENA_BG);
+        setBackground(Color.BLACK);
         setFocusable(true);
 
         // Ajouter tous les joueurs existants du serveur
@@ -202,6 +203,31 @@ public class Arena extends JPanel {
         
         // Anti-aliasing pour un rendu plus lisse
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        
+        // Fond noir pour les bandes latérales (letterbox)
+        g2d.setColor(Color.BLACK);
+        g2d.fillRect(0, 0, getWidth(), getHeight());
+        
+        // Calculer l'échelle pour remplir le panel en gardant le ratio
+        double scaleX = (double) getWidth() / Protocol.ARENA_WIDTH;
+        double scaleY = (double) getHeight() / Protocol.ARENA_HEIGHT;
+        double scale = Math.min(scaleX, scaleY);
+        
+        // Centrer l'arène dans le panel
+        double offsetX = (getWidth() - Protocol.ARENA_WIDTH * scale) / 2;
+        double offsetY = (getHeight() - Protocol.ARENA_HEIGHT * scale) / 2;
+        
+        // Appliquer la transformation (tout le dessin sera en coordonnées logiques)
+        g2d.translate(offsetX, offsetY);
+        g2d.scale(scale, scale);
+        
+        // Fond de l'arène
+        g2d.setColor(ARENA_BG);
+        g2d.fillRect(0, 0, Protocol.ARENA_WIDTH, Protocol.ARENA_HEIGHT);
+        
+        // Bordure de l'arène
+        g2d.setColor(new Color(60, 60, 60));
+        g2d.drawRect(0, 0, Protocol.ARENA_WIDTH - 1, Protocol.ARENA_HEIGHT - 1);
         
         // Dessiner la grille
         drawGrid(g2d);

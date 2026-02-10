@@ -15,14 +15,12 @@ import java.io.*;
 public class ServerService {
     private static ExecutorService executor = Executors.newCachedThreadPool();
     private static Random random = new Random();
-    private static Arena hostArena = null; // Arena de l'hôte
-    private static volatile boolean isRunning = false; // État du serveur
-    private static Thread discoveryThread; // Thread pour la découverte multicast
-    public static String lastConnectionError = null; // Dernier message d'erreur de connexion
+    private static Arena hostArena = null;              // Arene de l'hôte
+    private static volatile boolean isRunning = false;  // État du serveur
+    private static Thread discoveryThread;              // Thread pour la découverte multicast
+    public static String lastConnectionError = null;    // Dernier message d'erreur de connexion
 
-    /**
-     * Crée un nouveau serveur de jeu
-     */
+    /*Crée un nouveau serveur de jeu*/
     public static GameServer createServer() {
         GameServer gameServer = new GameServer();
         try {
@@ -36,9 +34,7 @@ public class ServerService {
         return gameServer;
     }
 
-    /**
-     * Démarre le serveur et commence à accepter les connexions
-     */
+    /*Démarre le serveur et commence à accepter les connexions*/
     public static void startGameServer(GameServer gameServer, Joueur joueurHost, Arena arena) throws IOException {
         // Sauvegarder l'arena de l'hôte pour pouvoir y ajouter les joueurs
         hostArena = arena;
@@ -54,7 +50,7 @@ public class ServerService {
         hostClient.setJoueur(joueurHost);
         gameServer.getclients().add(hostClient);
         
-        // Ajouter l'hôte à son arena
+        // Ajouter l'hôte à son arene
         if (hostArena != null) {
             hostArena.addJoueur(joueurHost);
             hostArena.setLocalPlayerId(joueurHost.getid());
@@ -177,9 +173,7 @@ public class ServerService {
         });
     }
 
-    /**
-     * Connecte un client à un serveur distant
-     */
+    /*Connecte un client à un serveur distant*/
     public static Client connectToServer(String serverHost, int serverPort, Joueur joueur, Arena arena) {
         lastConnectionError = null;
         try {
@@ -230,9 +224,7 @@ public class ServerService {
         }
     }
 
-    /**
-     * Assigne une position aléatoire valide à un joueur dans l'arène
-     */
+    /*Assigne une position aléatoire valide à un joueur dans l'arène*/
     private static void assignRandomPosition(Joueur joueur) {
         // Zones sûres pour ne pas apparaître hors de l'arène
         int maxX = Protocol.ARENA_WIDTH - Protocol.PLAYER_SIZE;
@@ -245,9 +237,7 @@ public class ServerService {
         joueur.setY(y);
     }
 
-    /**
-     * Arrête le serveur, la découverte multicast, et ferme toutes les connexions
-     */
+    /*Arrête le serveur, la découverte multicast, et ferme toutes les connexions*/
     public static void stopServer(GameServer gameServer) {
         System.out.println("=== ARRÊT DU SERVEUR ===");
         isRunning = false;
@@ -367,7 +357,7 @@ public class ServerService {
             String name = ni.getName().toLowerCase();
             String displayName = ni.getDisplayName().toLowerCase();
             
-            // IGNORER docker, veth, virtual, loopback
+            // Ignorer docker, veth, virtual, loopback
             if (name.contains("docker") || name.contains("veth") || name.contains("br-") || name.contains("vboxnet") || displayName.contains("virtual") || displayName.contains("loopback")) {
                 continue;
             }
@@ -399,9 +389,7 @@ public class ServerService {
         return "unknown";
     }
 
-    /**
-     * Retourne l'IP physique locale (WiFi/Ethernet), pas localhost
-     */
+    /*Retourne l'IP physique locale (WiFi/Ethernet)*/
     public static String getLocalPhysicalIP() {
         try {
             NetworkInterface ni = findPhysicalIPv4Interface();
@@ -414,7 +402,7 @@ public class ServerService {
         } catch (SocketException e) {
             System.err.println("Erreur lors de la récupération de l'IP physique: " + e.getMessage());
         }
-        // Fallback
+        
         try {
             return InetAddress.getLocalHost().getHostAddress();
         } catch (Exception e) {

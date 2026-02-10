@@ -34,6 +34,8 @@ public class HostGame extends JPanel {
 
         // Panel de gauche : Arène (créée AVANT de démarrer le serveur)
         arenaPanel = new Arena(new GameServer()); // Arena vide au début
+        arenaPanel.setHostServer(gameServer); // Permettre à l'hôte d'envoyer les mouvements
+        Client.setHostArena(arenaPanel); // Pour que le serveur mette à jour l'arène de l'hôte
         add(arenaPanel, BorderLayout.CENTER);
 
         // Panel de droite : Contrôles serveur 
@@ -214,16 +216,8 @@ public class HostGame extends JPanel {
             JOptionPane.WARNING_MESSAGE);
 
         if (confirm == JOptionPane.YES_OPTION) {
-            System.out.println("=== ARRÊT DU SERVEUR ===");
-            
-            // Fermer le serveur socket
-            try {
-                if (gameServer.getServeurSocket() != null && !gameServer.getServeurSocket().isClosed()) {
-                    gameServer.getServeurSocket().close();
-                }
-            } catch (IOException e) {
-                System.err.println("Erreur lors de la fermeture du serveur: " + e.getMessage());
-            }
+            // Arrêter le serveur via le service (ferme connexions + multicast)
+            ServerService.stopServer(gameServer);
             
             // Retour au menu
             parentFrame.getContentPane().removeAll();

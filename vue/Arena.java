@@ -1,6 +1,9 @@
 package vue;
 
 import java.awt.*;
+import java.awt.event.*;
+import java.util.HashSet;
+import java.util.Set;
 import javax.swing.*;
 import modele.client.*;
 import modele.common.Protocol;
@@ -15,11 +18,26 @@ public class Arena extends JPanel {
     // ID du joueur local (pour le mettre en évidence)
     private int localPlayerId = -1;
     
+    // Référence au client réseau pour envoyer les mouvements
+    private Client networkClient = null;
+    
+    // Référence au GameServer (pour l'hôte, qui broadcast directement)
+    private GameServer hostServer = null;
+    
+    // Touches actuellement enfoncées (pour mouvement fluide)
+    private final Set<Integer> pressedKeys = new HashSet<>();
+    
+    // Timer pour la boucle de jeu locale
+    private Timer gameLoopTimer;
+    
     // Couleurs
     private static final Color ARENA_BG = new Color(20, 20, 20);
     private static final Color GRID_COLOR = new Color(40, 40, 40);
     private static final Color LOCAL_PLAYER_COLOR = new Color(70, 130, 180);
     private static final Color OTHER_PLAYER_COLOR = new Color(220, 100, 50);
+    
+    // Vitesse de déplacement en pixels par tick
+    private static final int MOVE_SPEED = (int) Protocol.PLAYER_SPEED;
 
     public Arena(GameServer gameServer) {
         joueurs = new Vector<>();
@@ -35,7 +53,146 @@ public class Arena extends JPanel {
             addPlayer(client);
         }
         
+        // Gestion du clavier via Key Bindings (plus fiable que KeyListener)
+        setupKeyBindings();
+        
+        // Boucle de jeu pour le mouvement fluide
+        gameLoopTimer = new Timer(Protocol.TICK_DELAY_MS, e -> gameLoop());
+        gameLoopTimer.start();
+        
         System.out.println("Arena créée avec " + joueurs.size() + " joueur(s)");
+    }
+    
+    /**
+     * Configure les Key Bindings pour le mouvement (ZQSD + flèches)
+     */
+    private void setupKeyBindings() {
+        InputMap inputMap = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap actionMap = getActionMap();
+        
+        // Mapping des touches -> codes
+        int[][] keyMappings = {
+            {KeyEvent.VK_UP, KeyEvent.VK_UP},
+            {KeyEvent.VK_DOWN, KeyEvent.VK_DOWN},
+            {KeyEvent.VK_LEFT, KeyEvent.VK_LEFT},
+            {KeyEvent.VK_RIGHT, KeyEvent.VK_RIGHT},
+            {KeyEvent.VK_Z, KeyEvent.VK_UP},
+            {KeyEvent.VK_S, KeyEvent.VK_DOWN},
+            {KeyEvent.VK_Q, KeyEvent.VK_LEFT},
+            {KeyEvent.VK_D, KeyEvent.VK_RIGHT},
+        };
+        
+        for (int[] mapping : keyMappings) {
+            int physicalKey = mapping[0];
+            int direction = mapping[1];
+            
+            String pressName = "press_" + physicalKey;
+            String releaseName = "release_" + physicalKey;
+            
+            inputMap.put(KeyStroke.getKeyStroke(physicalKey, 0, false), pressName);
+            inputMap.put(KeyStroke.getKeyStroke(physicalKey, 0, true), releaseName);
+            
+            actionMap.put(pressName, new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    pressedKeys.add(direction);
+                }
+            });
+            
+            actionMap.put(releaseName, new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    pressedKeys.remove(direction);
+                }
+            });
+        }
+    }
+    
+    /**
+     * Boucle de jeu : applique le mouvement du joueur local et envoie au réseau
+     */
+    private void gameLoop() {
+        if (localPlayerId == -1 || pressedKeys.isEmpty()) return;
+        
+        Joueur localPlayer = getJoueurById(localPlayerId);
+        if (localPlayer == null) return;
+        
+        int dx = 0, dy = 0;
+        
+        if (pressedKeys.contains(KeyEvent.VK_UP))    dy -= MOVE_SPEED;
+        if (pressedKeys.contains(KeyEvent.VK_DOWN))   dy += MOVE_SPEED;
+        if (pressedKeys.contains(KeyEvent.VK_LEFT))   dx -= MOVE_SPEED;
+        if (pressedKeys.contains(KeyEvent.VK_RIGHT))  dx += MOVE_SPEED;
+        
+        if (dx == 0 && dy == 0) return;
+        
+        // Calculer la nouvelle position avec les limites de l'arène
+        int newX = Math.max(0, Math.min(Protocol.ARENA_WIDTH - Protocol.PLAYER_SIZE, localPlayer.getX() + dx));
+        int newY = Math.max(0, Math.min(Protocol.ARENA_HEIGHT - Protocol.PLAYER_SIZE, localPlayer.getY() + dy));
+        
+        // Ne rien faire si la position n'a pas changé
+        if (newX == localPlayer.getX() && newY == localPlayer.getY()) return;
+        
+        // Appliquer le mouvement localement
+        localPlayer.setX(newX);
+        localPlayer.setY(newY);
+        
+        // Envoyer le mouvement au réseau
+        sendMoveToNetwork(localPlayer);
+        
+        repaint();
+    }
+    
+    /**
+     * Envoie la position du joueur local au réseau
+     */
+    private void sendMoveToNetwork(Joueur joueur) {
+        String moveMsg = Protocol.buildMessage(
+            Protocol.MSG_MOVE,
+            String.valueOf(joueur.getid()),
+            String.valueOf(joueur.getX()),
+            String.valueOf(joueur.getY())
+        );
+        
+        // Si on est un client connecté, envoyer au serveur
+        if (networkClient != null) {
+            networkClient.send(moveMsg);
+        }
+        
+        // Si on est l'hôte, broadcaster directement aux clients connectés
+        if (hostServer != null) {
+            for (Client client : hostServer.getclients()) {
+                if (client.getSocket() != null) {
+                    client.send(moveMsg);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Définit le client réseau pour l'envoi des mouvements (côté client)
+     */
+    public void setNetworkClient(Client client) {
+        this.networkClient = client;
+    }
+    
+    /**
+     * Définit le serveur pour le broadcast direct (côté hôte)
+     */
+    public void setHostServer(GameServer server) {
+        this.hostServer = server;
+    }
+    
+    /**
+     * Retourne un joueur par son ID
+     */
+    private Joueur getJoueurById(int id) {
+        synchronized (joueurs) {
+            for (Joueur j : joueurs) {
+                if (j.getid() == id) return j;
+            }
+        }
+        return null;
     }
 
     @Override
@@ -189,6 +346,13 @@ public class Arena extends JPanel {
         this.localPlayerId = id;
         System.out.println("✓ ID joueur local: " + id);
         repaint();
+    }
+    
+    /**
+     * Retourne l'ID du joueur local
+     */
+    public int getLocalPlayerId() {
+        return localPlayerId;
     }
 
     /**

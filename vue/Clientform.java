@@ -2,8 +2,8 @@ package vue;
 
 import java.awt.*;
 import javax.swing.*;
-
-import modele.client.Joueur;
+import modele.client.*;
+import java.util.List;
 import modele.common.Protocol;
 import modele.server.GameServer;
 
@@ -56,10 +56,8 @@ public class Clientform extends JPanel {
         
         comboServers = new JComboBox<>();
         comboServers.setFont(new Font("Arial", Font.PLAIN, 14));
-        
-        // Ajouter des serveurs d'exemple (TODO: remplacer par scan réseau)
-        comboServers.addItem("127.0.0.1:" + Protocol.SERVER_PORT + " - Serveur Local");
-        comboServers.addItem("192.168.1.100:" + Protocol.SERVER_PORT + " - Serveur de test");
+        comboServers.addItem("Recherche en cours...");
+        comboServers.setEnabled(false);
         
         btnRefresh = new JButton("🔄");
         btnRefresh.setFocusPainted(false);
@@ -130,17 +128,35 @@ public class Clientform extends JPanel {
     }
 
     private void refreshServerList() {
-        // TODO: Implémenter le scan des serveurs disponibles sur le réseau
-        // Pour l'instant, on simule juste un refresh
-        comboServers.removeAllItems();
-        comboServers.addItem("127.0.0.1:" + Protocol.SERVER_PORT + " - Serveur Local");
-        comboServers.addItem("192.168.1.100:" + Protocol.SERVER_PORT + " - Partie de test");
-        comboServers.addItem("10.111.236.81:" + Protocol.SERVER_PORT + " - Serveur distant");
+        // Désactiver pendant la recherche
+        comboServers.setEnabled(false);
+        btnRefresh.setEnabled(false);
+        btnConnect.setEnabled(false);
         
-        JOptionPane.showMessageDialog(this, 
-            "Liste des serveurs actualisée !", 
-            "Actualisation", 
-            JOptionPane.INFORMATION_MESSAGE);
+        comboServers.removeAllItems();
+        comboServers.addItem("Recherche en cours...");
+        
+        new Thread(() -> {
+            List<String> listeIPs = Client.discoverStreamers(3000);
+            
+            SwingUtilities.invokeLater(() -> {
+                comboServers.removeAllItems();
+                
+                if (listeIPs.isEmpty()) {
+                    comboServers.addItem("Aucun serveur trouvé");
+                    System.out.println("Aucun serveur découvert");
+                } else {
+                    for (String ip : listeIPs) {
+                        comboServers.addItem(ip.trim());
+                        System.out.println("Serveur trouvé : " + ip);
+                    }
+                    btnConnect.setEnabled(true);
+                }
+                
+                comboServers.setEnabled(true);
+                btnRefresh.setEnabled(true);
+            });
+        }).start();
     }
 
     private void connectToServer() {
@@ -164,11 +180,18 @@ public class Clientform extends JPanel {
             return;
         }
 
-        // Extraire IP et Port du format "IP:PORT - Description"
-        String serverAddress = selectedServer.split(" - ")[0];
-        String[] parts = serverAddress.split(":");
-        String serverIP = parts[0];
-        int serverPort = Integer.parseInt(parts[1]);
+        // Extraire IP et Port (format "IP:PORT" ou "IP" seul)
+        String serverAddress = selectedServer.trim();
+        String serverIP;
+        int serverPort;
+        if (serverAddress.contains(":")) {
+            String[] parts = serverAddress.split(":");
+            serverIP = parts[0];
+            serverPort = Integer.parseInt(parts[1]);
+        } else {
+            serverIP = serverAddress;
+            serverPort = Protocol.SERVER_PORT; // Port par défaut
+        }
 
         Protocol.DEFAULT_SERVER_HOST = serverIP;
         Protocol.SERVER_PORT = serverPort;
@@ -177,7 +200,6 @@ public class Clientform extends JPanel {
 
         Joueur joueur = new Joueur();
         joueur.setPseudo(pseudo);
-        // La position sera assignée par le serveur
 
         // Lancer l'affichage client
         parentFrame.getContentPane().removeAll();

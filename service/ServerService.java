@@ -6,6 +6,7 @@ import modele.server.*;
 import vue.Arena;
 
 import java.net.*;
+import java.util.Enumeration;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -15,6 +16,9 @@ public class ServerService {
     private static ExecutorService executor = Executors.newCachedThreadPool();
     private static Random random = new Random();
     private static Arena hostArena = null; // Arena de l'hôte
+    private static volatile boolean isRunning = false; // État du serveur
+    private static Thread discoveryThread; // Thread pour la découverte multicast
+    public static String lastConnectionError = null; // Dernier message d'erreur de connexion
 
     /**
      * Crée un nouveau serveur de jeu
@@ -58,11 +62,15 @@ public class ServerService {
         
         System.out.println("✓ Hôte ajouté: " + joueurHost.getPseudo() + " à la position (" + joueurHost.getX() + ", " + joueurHost.getY() + ")");
 
+        // Marquer le serveur comme actif et démarrer la découverte multicast
+        isRunning = true;
+        startDiscoveryResponder();
+
         executor.submit(() -> {
             try {
                 int nextPlayerId = 1;
                 
-                while (gameServer.getclients().size() < gameServer.getNombre_joueurs()) {
+                while (isRunning) {
                     try {
                         System.out.println("⏳ En attente de connexions... (" + gameServer.getclients().size() + "/" + gameServer.getNombre_joueurs() + ")");
                         Socket clientSocket = gameServer.getServeurSocket().accept();
@@ -73,6 +81,16 @@ public class ServerService {
                         String connectMessage = in.readLine();
                         
                         if (connectMessage != null && connectMessage.startsWith(Protocol.MSG_CONNECT)) {
+                            
+                            // Vérifier si le serveur est plein
+                            if (gameServer.getclients().size() >= gameServer.getNombre_joueurs()) {
+                                PrintWriter rejectOut = new PrintWriter(new OutputStreamWriter(clientSocket.getOutputStream()), true);
+                                rejectOut.println(Protocol.buildMessage(Protocol.MSG_SERVER_FULL, "Serveur plein"));
+                                clientSocket.close();
+                                System.out.println("✗ Connexion refusée: serveur plein");
+                                continue;
+                            }
+                            
                             String[] parts = Protocol.parseMessage(connectMessage);
                             
                             // Créer le joueur avec les infos reçues
@@ -143,12 +161,14 @@ public class ServerService {
                             executor.submit(client);
                         }
                     } catch (SocketException e) {
-                        System.out.println("Serveur arrêté");
+                        if (isRunning) {
+                            System.out.println("Erreur socket: " + e.getMessage());
+                        } else {
+                            System.out.println("Serveur arrêté");
+                        }
                         break;
                     }
                 }
-                
-                System.out.println("✓ Nombre maximum de joueurs atteint (" + gameServer.getNombre_joueurs() + ")");
                 
             } catch (IOException e) {
                 System.err.println("✗ Erreur serveur: " + e.getMessage());
@@ -161,6 +181,7 @@ public class ServerService {
      * Connecte un client à un serveur distant
      */
     public static Client connectToServer(String serverHost, int serverPort, Joueur joueur, Arena arena) {
+        lastConnectionError = null;
         try {
             System.out.println("⏳ Tentative de connexion à " + serverHost + ":" + serverPort);
             
@@ -178,12 +199,20 @@ public class ServerService {
             client.send(connectMsg);
             System.out.println("→ Envoi: " + connectMsg.trim());
             
-            // Lire la réponse de bienvenue
+            // Lire la réponse du serveur
             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            String welcomeMsg = in.readLine();
+            String response = in.readLine();
             
-            if (welcomeMsg != null && welcomeMsg.startsWith(Protocol.MSG_WELCOME)) {
-                String[] parts = Protocol.parseMessage(welcomeMsg);
+            // Vérifier si le serveur est plein
+            if (response != null && response.startsWith(Protocol.MSG_SERVER_FULL)) {
+                System.out.println("✗ Serveur plein !");
+                lastConnectionError = "Le serveur est plein !\nNombre maximum de joueurs atteint.";
+                socket.close();
+                return null;
+            }
+            
+            if (response != null && response.startsWith(Protocol.MSG_WELCOME)) {
+                String[] parts = Protocol.parseMessage(response);
                 joueur.setid(Integer.parseInt(parts[1]));
                 joueur.setX(Integer.parseInt(parts[2]));
                 joueur.setY(Integer.parseInt(parts[3]));
@@ -195,6 +224,7 @@ public class ServerService {
             
         } catch (IOException e) {
             System.err.println("✗ Erreur de connexion: " + e.getMessage());
+            lastConnectionError = "Impossible de se connecter au serveur.\n" + e.getMessage();
             e.printStackTrace();
             return null;
         }
@@ -213,5 +243,182 @@ public class ServerService {
         
         joueur.setX(x);
         joueur.setY(y);
+    }
+
+    /**
+     * Arrête le serveur, la découverte multicast, et ferme toutes les connexions
+     */
+    public static void stopServer(GameServer gameServer) {
+        System.out.println("=== ARRÊT DU SERVEUR ===");
+        isRunning = false;
+
+        // Arrêter la découverte multicast
+        if (discoveryThread != null) {
+            discoveryThread.interrupt();
+            discoveryThread = null;
+            System.out.println("✓ Découverte multicast arrêtée");
+        }
+
+        // Envoyer SERVER_STOP à tous les clients avant de fermer
+        String stopMsg = Protocol.buildMessage(Protocol.MSG_SERVER_STOP);
+        for (Client client : gameServer.getclients()) {
+            if (client.getSocket() != null) {
+                client.send(stopMsg);
+            }
+        }
+
+        // Petit délai pour que les clients reçoivent le message
+        try { Thread.sleep(200); } catch (InterruptedException e) {}
+
+        // Fermer toutes les connexions clients
+        for (Client client : gameServer.getclients()) {
+            if (client.getSocket() != null) {
+                client.close();
+            }
+        }
+        gameServer.getclients().clear();
+
+        // Fermer le serveur socket
+        try {
+            if (gameServer.getServeurSocket() != null && !gameServer.getServeurSocket().isClosed()) {
+                gameServer.getServeurSocket().close();
+            }
+        } catch (IOException e) {
+            System.err.println("✗ Erreur lors de la fermeture du serveur: " + e.getMessage());
+        }
+
+        hostArena = null;
+        System.out.println("✓ Serveur arrêté");
+    }
+
+    /*Ajouter le serveur au groupe multiccast*/
+    private static void startDiscoveryResponder() {
+        discoveryThread = new Thread(() -> {
+            MulticastSocket socket = null;
+            try {
+                socket = new MulticastSocket(Protocol.DISCOVERY_PORT);
+                InetAddress group = InetAddress.getByName(Protocol.MULTICAST_GROUP);
+                
+                // Trouver une interface PHYSIQUE IPv4
+                NetworkInterface networkInterface = findPhysicalIPv4Interface();
+                
+                if (networkInterface == null) {
+                    System.err.println("Impossible de démarrer la découverte : aucune interface physique IPv4");
+                    return;
+                }
+                
+                System.out.println("Interface multicast : " + networkInterface.getName() + " (" + networkInterface.getDisplayName() + ")");
+                
+                // Rejoindre le groupe
+                InetSocketAddress groupAddress = new InetSocketAddress(group, Protocol.DISCOVERY_PORT);
+                socket.joinGroup(groupAddress, networkInterface);
+                
+                System.out.println("Serveur visible sur multicast " + Protocol.MULTICAST_GROUP);
+                
+                byte[] buffer = new byte[256];
+                
+                while (isRunning) {
+                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                    socket.receive(packet);
+                    
+                    String request = new String(packet.getData(), 0, packet.getLength());
+                    
+                    if (request.equals("DISCOVER_GAME")) {
+                        // Utiliser l'IP de l'interface physique + port
+                        String myIP = getIPFromInterface(networkInterface);
+                        String response = myIP + ":" + Protocol.SERVER_PORT;
+                        System.out.println("Requête découverte reçue, envoi : " + response);
+                        
+                        byte[] responseData = response.getBytes();
+                        
+                        DatagramPacket responsePacket = new DatagramPacket(
+                            responseData, responseData.length,
+                            packet.getAddress(), packet.getPort()
+                        );
+                        
+                        DatagramSocket sendSocket = new DatagramSocket();
+                        sendSocket.send(responsePacket);
+                        sendSocket.close();
+                    }
+                }
+                
+                socket.leaveGroup(groupAddress, networkInterface);
+                socket.close();
+                
+            } catch (Exception e) {
+                if (isRunning) {
+                    e.printStackTrace();
+                }
+            } finally {
+                if (socket != null && !socket.isClosed()) {
+                    socket.close();
+                }
+            }
+        }, "Discovery-Responder");
+        discoveryThread.start();
+    }
+
+    /*Trouve une interface réseau physique IPv4 (WiFi/Ethernet) pour le multicast*/
+    private static NetworkInterface findPhysicalIPv4Interface() throws SocketException {
+        Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+        while (interfaces.hasMoreElements()) {
+            NetworkInterface ni = interfaces.nextElement();
+            
+            String name = ni.getName().toLowerCase();
+            String displayName = ni.getDisplayName().toLowerCase();
+            
+            // IGNORER docker, veth, virtual, loopback
+            if (name.contains("docker") || name.contains("veth") || name.contains("br-") || name.contains("vboxnet") || displayName.contains("virtual") || displayName.contains("loopback")) {
+                continue;
+            }
+            
+            if (!ni.isUp() || !ni.supportsMulticast()) {
+                continue;
+            }
+            
+            Enumeration<InetAddress> addresses = ni.getInetAddresses();
+            while (addresses.hasMoreElements()) {
+                InetAddress addr = addresses.nextElement();
+                if (addr instanceof java.net.Inet4Address && !addr.isLoopbackAddress()) {
+                    return ni;
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    private static String getIPFromInterface(NetworkInterface ni) {
+        Enumeration<InetAddress> addresses = ni.getInetAddresses();
+        while (addresses.hasMoreElements()) {
+            InetAddress addr = addresses.nextElement();
+            if (addr instanceof java.net.Inet4Address && !addr.isLoopbackAddress()) {
+                return addr.getHostAddress();
+            }
+        }
+        return "unknown";
+    }
+
+    /**
+     * Retourne l'IP physique locale (WiFi/Ethernet), pas localhost
+     */
+    public static String getLocalPhysicalIP() {
+        try {
+            NetworkInterface ni = findPhysicalIPv4Interface();
+            if (ni != null) {
+                String ip = getIPFromInterface(ni);
+                if (!"unknown".equals(ip)) {
+                    return ip;
+                }
+            }
+        } catch (SocketException e) {
+            System.err.println("Erreur lors de la récupération de l'IP physique: " + e.getMessage());
+        }
+        // Fallback
+        try {
+            return InetAddress.getLocalHost().getHostAddress();
+        } catch (Exception e) {
+            return "127.0.0.1";
+        }
     }
 }

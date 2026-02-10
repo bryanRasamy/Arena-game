@@ -8,6 +8,10 @@ public class Protocol {
     public static final int SOCKET_TIMEOUT_MS = 5000; // Timeout pour détection déconnexion
     public static final int MAX_PACKET_SIZE = 1024;
     
+    /*MULTICAST*/
+    public static final String MULTICAST_GROUP = "239.1.1.1";
+    public static final int DISCOVERY_PORT = 9876;
+
     /*JEU */
     // Boucle de jeu
     public static final int TICK_RATE = 10; // Mises à jour par seconde (10 Hz)
@@ -33,6 +37,11 @@ public class Protocol {
     public static final String MSG_PLAYER_LEFT = "LEFT";     // Joueur parti
     public static final String MSG_PONG = "PONG";            // Réponse ping
     public static final String MSG_ERROR = "ERROR";          // Erreur
+    public static final String MSG_SERVER_FULL = "SERVER_FULL"; // Serveur plein
+    public static final String MSG_SERVER_STOP = "SERVER_STOP"; // Serveur arrêté
+    
+    // Bidirectionnel
+    public static final String MSG_MOVE = "MOVE";            // Mouvement joueur: MOVE|id|x|y
     
     /*DIRECTIONS*/
     public static final String DIR_UP = "UP";

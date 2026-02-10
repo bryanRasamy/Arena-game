@@ -2,6 +2,8 @@ package modele.client;
 
 import java.io.*;
 import java.net.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Vector;
 
 import modele.common.Protocol;
@@ -16,6 +18,8 @@ public class Client implements Runnable{
     private Joueur joueur;
     private Arena arena;
     private boolean running;
+    private Runnable onDisconnected = null;
+    private volatile boolean disconnectHandled = false;
     
     public Client(Arena arena) {
         this.arena = arena;
@@ -59,6 +63,10 @@ public class Client implements Runnable{
         return server;
     }
 
+    public void setOnDisconnected(Runnable callback) {
+        this.onDisconnected = callback;
+    }
+
     @Override
     public void run() {
         try {
@@ -71,9 +79,9 @@ public class Client implements Runnable{
                 if (arena != null) {
                     handleMessage(message);
                 } else {
-                    // Sinon (côté serveur), broadcaster aux autres clients
+                    // Sinon (côté serveur), traiter et broadcaster
                     if (server != null) {
-                        broadcastMessage(message);
+                        handleServerMessage(message);
                     }
                 }
             }
@@ -84,6 +92,25 @@ public class Client implements Runnable{
             }
         } finally {
             System.out.println("Arrêt du gestionnaire réseau");
+            
+            // Côté serveur : notifier les autres que ce joueur est parti
+            if (server != null && joueur != null) {
+                String leftMsg = Protocol.buildMessage(Protocol.MSG_PLAYER_LEFT, String.valueOf(joueur.getid()));
+                for (Client c : new java.util.ArrayList<>(server.getclients())) {
+                    if (c != this && c.getSocket() != null) {
+                        c.send(leftMsg);
+                    }
+                }
+                // Retirer de l'arène de l'hôte
+                if (hostArena != null) {
+                    hostArena.removeJoueur(joueur.getid());
+                }
+                System.out.println("✓ Joueur déconnecté: " + joueur.getPseudo() + " (ID: " + joueur.getid() + ")");
+            }
+            
+            // Côté client : déclencher le callback de déconnexion
+            triggerDisconnect();
+            
             close();
         }
     }
@@ -118,6 +145,24 @@ public class Client implements Runnable{
                 }
                 break;
                 
+            case Protocol.MSG_MOVE:
+                // Format: MOVE|id|x|y
+                if (parts.length >= 4) {
+                    int moveId = Integer.parseInt(parts[1]);
+                    int moveX = Integer.parseInt(parts[2]);
+                    int moveY = Integer.parseInt(parts[3]);
+                    
+                    // Ne pas mettre à jour notre propre joueur (déjà fait localement)
+                    if (moveId != arena.getLocalPlayerId()) {
+                        Joueur movedJoueur = new Joueur();
+                        movedJoueur.setid(moveId);
+                        movedJoueur.setX(moveX);
+                        movedJoueur.setY(moveY);
+                        arena.updateJoueur(movedJoueur);
+                    }
+                }
+                break;
+                
             case Protocol.MSG_GAME_STATE:
                 // Format: STATE|id1|x1|y1|id2|x2|y2|...
                 // Mise à jour complète de l'état du jeu
@@ -133,6 +178,13 @@ public class Client implements Runnable{
                 }
                 break;
                 
+            case Protocol.MSG_SERVER_STOP:
+                // Le serveur a été arrêté
+                System.out.println("⚠ Le serveur a été arrêté");
+                running = false;
+                triggerDisconnect();
+                break;
+                
             case Protocol.MSG_ERROR:
                 if (parts.length >= 2) {
                     System.err.println("✗ Erreur serveur: " + parts[1]);
@@ -145,6 +197,56 @@ public class Client implements Runnable{
         }
     }
 
+    // Référence à l'arène de l'hôte (pour la mise à jour visuelle côté serveur)
+    private static Arena hostArena = null;
+    
+    public static void setHostArena(Arena arena) {
+        hostArena = arena;
+    }
+    
+    /**
+     * Traite les messages reçus d'un client (côté serveur)
+     */
+    private void handleServerMessage(String message) {
+        String[] parts = Protocol.parseMessage(message);
+        if (parts.length == 0) return;
+        
+        String messageType = parts[0];
+        
+        switch (messageType) {
+            case Protocol.MSG_MOVE:
+                // Format: MOVE|id|x|y — mettre à jour le joueur et broadcaster
+                if (parts.length >= 4) {
+                    int moveId = Integer.parseInt(parts[1]);
+                    int moveX = Integer.parseInt(parts[2]);
+                    int moveY = Integer.parseInt(parts[3]);
+                    
+                    // Mettre à jour le joueur dans le modèle serveur
+                    if (joueur != null && joueur.getid() == moveId) {
+                        joueur.setX(moveX);
+                        joueur.setY(moveY);
+                    }
+                    
+                    // Mettre à jour l'arène de l'hôte
+                    if (hostArena != null) {
+                        Joueur updated = new Joueur();
+                        updated.setid(moveId);
+                        updated.setX(moveX);
+                        updated.setY(moveY);
+                        hostArena.updateJoueur(updated);
+                    }
+                }
+                // Broadcaster à tous les autres clients (y compris l'hôte ne reçoit pas par socket)
+                broadcastMessage(message);
+                break;
+                
+            default:
+                // Pour les autres messages, broadcaster simplement
+                broadcastMessage(message);
+                break;
+        }
+    }
+    
     /**
      * Broadcast un message à tous les autres clients (côté serveur)
      */
@@ -184,6 +286,16 @@ public class Client implements Runnable{
     }
     
     /**
+     * Déclenche le callback de déconnexion (une seule fois)
+     */
+    private void triggerDisconnect() {
+        if (!disconnectHandled && onDisconnected != null && arena != null) {
+            disconnectHandled = true;
+            javax.swing.SwingUtilities.invokeLater(onDisconnected);
+        }
+    }
+    
+    /**
      * Ferme proprement la connexion
      */
     public void close() {
@@ -197,6 +309,68 @@ public class Client implements Runnable{
         } catch (IOException e) {
             System.err.println("✗ Erreur lors de la fermeture: " + e.getMessage());
         }
+    }
+
+    /*Recuperer la liste des ip de serveurs disponible*/
+    public static List<String> discoverStreamers(int timeoutMs) {
+        List<String> streamerIPs = new ArrayList<>();
+        
+        try {
+            System.out.println("Démarrage de la découverte multicast...");
+            
+            // UN SEUL socket pour envoyer ET recevoir
+            DatagramSocket socket = new DatagramSocket();
+            int localPort = socket.getLocalPort();
+            
+            socket.setSoTimeout(timeoutMs);
+            
+            InetAddress group = InetAddress.getByName(Protocol.MULTICAST_GROUP);
+            
+            // Envoyer requête multicast
+            String message = "DISCOVER_GAME";
+            byte[] buffer = message.getBytes();
+            DatagramPacket packet = new DatagramPacket(
+                buffer, buffer.length, group, Protocol.DISCOVERY_PORT
+            );
+            
+            System.out.println("Envoi requête multicast...");
+            socket.send(packet);
+            
+            System.out.println("Attente des réponses...");
+            
+            // Recevoir les réponses sur le MÊME socket
+            byte[] receiveBuffer = new byte[256];
+            
+            try {
+                while (true) {
+                    DatagramPacket receivePacket = new DatagramPacket(
+                        receiveBuffer, receiveBuffer.length
+                    );
+                    socket.receive(receivePacket);
+                    
+                    String ip = new String(
+                        receivePacket.getData(), 
+                        0, 
+                        receivePacket.getLength()
+                    ).trim();
+                    
+                    System.out.println("Serveur trouvé : " + ip);
+                    streamerIPs.add(ip);
+                }
+            } catch (SocketTimeoutException e) {
+                System.out.println("Timeout atteint");
+            }
+            
+            socket.close();
+            
+            System.out.println("Découverte terminée. Total : " + streamerIPs.size());
+            
+        } catch (Exception e) {
+            System.err.println("Erreur découverte : " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return streamerIPs;
     }
 
 }

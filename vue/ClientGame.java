@@ -103,6 +103,21 @@ public class ClientGame extends JPanel {
                         // Ajouter le joueur local à l'arène
                         arenaPanel.addJoueur(joueurLocal);
                         arenaPanel.setLocalPlayerId(joueurLocal.getid());
+                        
+                        // Connecter l'arène au réseau pour envoyer les mouvements
+                        arenaPanel.setNetworkClient(client);
+                    });
+                    
+                    // Callback si le serveur s'arrête
+                    client.setOnDisconnected(() -> {
+                        JOptionPane.showMessageDialog(ClientGame.this,
+                            "Vous avez été déconnecté du serveur.\n",
+                            "Déconnexion",
+                            JOptionPane.WARNING_MESSAGE);
+                        parentFrame.getContentPane().removeAll();
+                        parentFrame.add(new MainPanel(parentFrame), BorderLayout.CENTER);
+                        parentFrame.revalidate();
+                        parentFrame.repaint();
                     });
                     
                     // Démarrer le thread d'écoute du client
@@ -111,13 +126,22 @@ public class ClientGame extends JPanel {
                     System.out.println("✓ Client connecté et prêt!");
                     
                 } else {
-                    // Échec de connexion
+                    // Échec de connexion (serveur plein ou erreur réseau)
                     SwingUtilities.invokeLater(() -> {
-                        updateConnectionStatus(false);
-                        JOptionPane.showMessageDialog(this,
-                            "Impossible de se connecter au serveur\nVérifiez que le serveur est bien démarré.",
+                        String errorMsg = ServerService.lastConnectionError != null ?
+                            ServerService.lastConnectionError :
+                            "Impossible de se connecter au serveur.\nVérifiez que le serveur est bien démarré.";
+                        
+                        JOptionPane.showMessageDialog(ClientGame.this,
+                            errorMsg,
                             "Erreur de connexion",
                             JOptionPane.ERROR_MESSAGE);
+                        
+                        // Retour au menu principal
+                        parentFrame.getContentPane().removeAll();
+                        parentFrame.add(new MainPanel(parentFrame), BorderLayout.CENTER);
+                        parentFrame.revalidate();
+                        parentFrame.repaint();
                     });
                 }
                 
@@ -126,11 +150,16 @@ public class ClientGame extends JPanel {
                 e.printStackTrace();
                 
                 SwingUtilities.invokeLater(() -> {
-                    updateConnectionStatus(false);
-                    JOptionPane.showMessageDialog(this,
+                    JOptionPane.showMessageDialog(ClientGame.this,
                         "Erreur: " + e.getMessage(),
                         "Erreur de connexion",
                         JOptionPane.ERROR_MESSAGE);
+                    
+                    // Retour au menu principal
+                    parentFrame.getContentPane().removeAll();
+                    parentFrame.add(new MainPanel(parentFrame), BorderLayout.CENTER);
+                    parentFrame.revalidate();
+                    parentFrame.repaint();
                 });
             }
         }).start();
@@ -149,10 +178,6 @@ public class ClientGame extends JPanel {
             // Arrêter le client
             if (client != null) {
                 client.stop();
-                
-                // Envoyer message de déconnexion
-                String disconnectMsg = Protocol.buildMessage(Protocol.MSG_DISCONNECT, String.valueOf(joueurLocal.getid()));
-                client.send(disconnectMsg);
                 
                 // Fermer la connexion
                 client.close();

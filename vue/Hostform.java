@@ -1,6 +1,7 @@
 package vue;
 
 import java.awt.*;
+
 import javax.swing.*;
 import modele.common.*;
 import modele.server.*;
@@ -10,7 +11,6 @@ import service.*;
 public class Hostform extends JPanel {
     private MainFrame parentFrame;
     private JTextField txtPseudo;
-    private JTextField txtServerIP;
     private JSpinner spinMaxPlayers;
     private JButton btnStart;
     private JButton btnBack;
@@ -45,15 +45,7 @@ public class Hostform extends JPanel {
         gbc.gridx = 1;
         txtPseudo = createTextField("Joueur1");
         formPanel.add(txtPseudo, gbc);
-
-        // IP du serveur
-        gbc.gridx = 0; gbc.gridy = 1;
-        formPanel.add(createLabel("IP du serveur :"), gbc);
         
-        gbc.gridx = 1;
-        txtServerIP = createTextField("127.0.0.1");
-        formPanel.add(txtServerIP, gbc);
-
         // Nombre max de joueurs
         gbc.gridx = 0; gbc.gridy = 2;
         formPanel.add(createLabel("Nombre max de joueurs :"), gbc);
@@ -122,8 +114,12 @@ public class Hostform extends JPanel {
     }
 
     private void startServer() {
+        // Utiliser l'IP physique (WiFi/Ethernet), pas localhost
+        Protocol.DEFAULT_SERVER_HOST = ServerService.getLocalPhysicalIP();
+        System.out.println("IP du serveur: " + Protocol.DEFAULT_SERVER_HOST);
+        
         String pseudo = txtPseudo.getText().trim();
-        String serverIP = txtServerIP.getText().trim();
+        
         int maxPlayers = (int) spinMaxPlayers.getValue();
 
         // Validation
@@ -135,16 +131,7 @@ public class Hostform extends JPanel {
             return;
         }
 
-        if (serverIP.isEmpty()) {
-            JOptionPane.showMessageDialog(this, 
-                "Veuillez entrer l'IP du serveur !", 
-                "Erreur", 
-                JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
         // Création et démarrage du serveur
-        Protocol.DEFAULT_SERVER_HOST = serverIP;
         GameServer server = ServerService.createServer();
         server.setNombre_joueurs(maxPlayers);
 
@@ -162,6 +149,5 @@ public class Hostform extends JPanel {
 
     // Getters pour tests
     public String getPseudo() { return txtPseudo.getText().trim(); }
-    public String getServerIP() { return txtServerIP.getText().trim(); }
     public int getMaxPlayers() { return (int) spinMaxPlayers.getValue(); }
 }

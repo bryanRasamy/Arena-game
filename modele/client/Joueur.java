@@ -6,6 +6,7 @@ public class Joueur {
     private int x;
     private int y;
     private boolean isHost;
+    private int score;
 
     /*Constructeur*/
     public Joueur(){
@@ -33,6 +34,10 @@ public class Joueur {
         this.isHost = isHost;
     }
 
+    public void setScore(int score){
+        this.score = score;
+    }
+
     /*Getters*/
     public int getid(){
         return id_joueur;
@@ -52,5 +57,9 @@ public class Joueur {
 
     public int getY(){
         return y;
+    }
+
+    public int getScore(){
+        return score;
     }
 }

@@ -143,9 +143,15 @@ public class HostGame extends JPanel {
         centerContent.add(playerListPanel);
         centerContent.add(statsPanel);
 
+        // Assemblage des boutons en bas
+        JPanel bottomPanel = new JPanel();
+        bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.Y_AXIS));
+        bottomPanel.setBackground(panel.getBackground());
+        bottomPanel.add(btnStopServer);
+
         panel.add(title, BorderLayout.NORTH);
         panel.add(centerContent, BorderLayout.CENTER);
-        panel.add(btnStopServer, BorderLayout.SOUTH);
+        panel.add(bottomPanel, BorderLayout.SOUTH);
 
         return panel;
     }
@@ -176,6 +182,19 @@ public class HostGame extends JPanel {
             // Passer l'arène au ServerService pour qu'il puisse y ajouter les joueurs
             ServerService.startGameServer(gameServer, joueurHost, arenaPanel);
             System.out.println("✓ Serveur démarré avec succès");
+            
+            // Démarrer le système de capture de zone
+            ServerService.startCaptureZone(gameServer);
+            System.out.println("✓ Capture de zone activée");
+            
+            // Callback victoire finale : retour au menu
+            arenaPanel.setOnGameWon(() -> {
+                ServerService.stopServer(gameServer);
+                parentFrame.getContentPane().removeAll();
+                parentFrame.add(new MainPanel(parentFrame), BorderLayout.CENTER);
+                parentFrame.revalidate();
+                parentFrame.repaint();
+            });
             
             // Timer pour mettre à jour l'affichage régulièrement
             Timer updateTimer = new Timer(500, e -> {

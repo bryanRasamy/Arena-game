@@ -19,6 +19,9 @@ public class ServerService {
     private static volatile boolean isRunning = false;  // État du serveur
     private static Thread discoveryThread;              // Thread pour la découverte multicast
     public static String lastConnectionError = null;    // Dernier message d'erreur de connexion
+    private static CaptureZone currentZone = null;       // Zone de capture active
+    private static Thread captureZoneThread = null;      // Thread de gestion de la zone
+    private static volatile boolean gameOver = false;     // Partie terminée
 
     /*Crée un nouveau serveur de jeu*/
     public static GameServer createServer() {
@@ -60,6 +63,7 @@ public class ServerService {
 
         // Marquer le serveur comme actif et démarrer la découverte multicast
         isRunning = true;
+        gameOver = false;
         startDiscoveryResponder();
 
         executor.submit(() -> {
@@ -111,12 +115,13 @@ public class ServerService {
                                 Protocol.MSG_WELCOME,
                                 String.valueOf(nouveauJoueur.getid()),
                                 String.valueOf(nouveauJoueur.getX()),
-                                String.valueOf(nouveauJoueur.getY())
+                                String.valueOf(nouveauJoueur.getY()),
+                                String.valueOf(Protocol.SCORE_TO_WIN)
                             );
                             out.println(welcomeMsg);
                             
                             // Envoyer la liste de tous les joueurs existants au nouveau client
-                            for (Client existingClient : gameServer.getclients()) {
+                            for (Client existingClient : new java.util.ArrayList<>(gameServer.getclients())) {
                                 if (existingClient != client) {
                                     Joueur j = existingClient.getJoueur();
                                     String playerMsg = Protocol.buildMessage(
@@ -129,6 +134,32 @@ public class ServerService {
                                     out.println(playerMsg);
                                 }
                             }
+                            
+                            // Envoyer la zone de capture actuelle si elle existe
+                            if (currentZone != null && currentZone.isActive()) {
+                                String zoneMsg = Protocol.buildMessage(
+                                    Protocol.MSG_ZONE_SPAWN,
+                                    String.valueOf(currentZone.getX()),
+                                    String.valueOf(currentZone.getY()),
+                                    String.valueOf(currentZone.getWidth()),
+                                    String.valueOf(currentZone.getHeight())
+                                );
+                                out.println(zoneMsg);
+                                
+                                // Envoyer aussi la progression si quelqu'un capture
+                                if (currentZone.getCapturingPlayerId() != -1) {
+                                    String zoneUpdate = Protocol.buildMessage(
+                                        Protocol.MSG_ZONE_UPDATE,
+                                        String.valueOf(currentZone.getCapturingPlayerId()),
+                                        currentZone.getCapturingPlayerName().isEmpty() ? "none" : currentZone.getCapturingPlayerName(),
+                                        String.valueOf(currentZone.getCaptureProgress())
+                                    );
+                                    out.println(zoneUpdate);
+                                }
+                            }
+                            
+                            // Envoyer les scores actuels
+                            broadcastScores(gameServer);
                             
                             // Ajouter le nouveau joueur à l'arena de l'hôte
                             if (hostArena != null) {
@@ -145,7 +176,7 @@ public class ServerService {
                                 String.valueOf(nouveauJoueur.getY())
                             );
                             
-                            for (Client existingClient : gameServer.getclients()) {
+                            for (Client existingClient : new java.util.ArrayList<>(gameServer.getclients())) {
                                 if (existingClient != client && existingClient.getSocket() != null) {
                                     existingClient.send(joinMsg);
                                 }
@@ -193,9 +224,8 @@ public class ServerService {
             client.send(connectMsg);
             System.out.println("→ Envoi: " + connectMsg.trim());
             
-            // Lire la réponse du serveur
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            String response = in.readLine();
+            // Lire la réponse du serveur (utiliser le BufferedReader du client pour ne pas perdre de messages)
+            String response = client.readLine();
             
             // Vérifier si le serveur est plein
             if (response != null && response.startsWith(Protocol.MSG_SERVER_FULL)) {
@@ -210,6 +240,12 @@ public class ServerService {
                 joueur.setid(Integer.parseInt(parts[1]));
                 joueur.setX(Integer.parseInt(parts[2]));
                 joueur.setY(Integer.parseInt(parts[3]));
+                
+                // Synchroniser le score cible depuis le serveur
+                if (parts.length >= 5) {
+                    Protocol.SCORE_TO_WIN = Integer.parseInt(parts[4]);
+                    System.out.println("✓ Score cible synchronisé: " + Protocol.SCORE_TO_WIN);
+                }
                 
                 System.out.println("✓ Connecté avec succès! ID: " + joueur.getid() + " Position: (" + joueur.getX() + ", " + joueur.getY() + ")");
             }
@@ -242,6 +278,9 @@ public class ServerService {
         System.out.println("=== ARRÊT DU SERVEUR ===");
         isRunning = false;
 
+        // Arrêter la capture de zone
+        stopCaptureZone();
+
         // Arrêter la découverte multicast
         if (discoveryThread != null) {
             discoveryThread.interrupt();
@@ -251,7 +290,7 @@ public class ServerService {
 
         // Envoyer SERVER_STOP à tous les clients avant de fermer
         String stopMsg = Protocol.buildMessage(Protocol.MSG_SERVER_STOP);
-        for (Client client : gameServer.getclients()) {
+        for (Client client : new java.util.ArrayList<>(gameServer.getclients())) {
             if (client.getSocket() != null) {
                 client.send(stopMsg);
             }
@@ -261,7 +300,7 @@ public class ServerService {
         try { Thread.sleep(200); } catch (InterruptedException e) {}
 
         // Fermer toutes les connexions clients
-        for (Client client : gameServer.getclients()) {
+        for (Client client : new java.util.ArrayList<>(gameServer.getclients())) {
             if (client.getSocket() != null) {
                 client.close();
             }
@@ -357,7 +396,7 @@ public class ServerService {
             String name = ni.getName().toLowerCase();
             String displayName = ni.getDisplayName().toLowerCase();
             
-            // Ignorer docker, veth, virtual, loopback
+            // Ignorer docker, veth, virtual, loopback👉
             if (name.contains("docker") || name.contains("veth") || name.contains("br-") || name.contains("vboxnet") || displayName.contains("virtual") || displayName.contains("loopback")) {
                 continue;
             }
@@ -408,5 +447,244 @@ public class ServerService {
         } catch (Exception e) {
             return "127.0.0.1";
         }
+    }
+
+    /*=== CAPTURE DE ZONE ===*/
+    public static void startCaptureZone(GameServer gameServer) {
+        captureZoneThread = new Thread(() -> {
+            try {
+                // Attendre un peu avant la première zone
+                Thread.sleep(Protocol.ZONE_SPAWN_DELAY_MS);
+                
+                while (isRunning) {
+                    // Faire apparaître une nouvelle zone
+                    spawnNewZone(gameServer);
+                    
+                    // Boucle de vérification toutes les secondes
+                    while (isRunning && !gameOver && currentZone != null && currentZone.isActive() && !currentZone.isCaptured()) {
+                        captureZoneTick(gameServer);
+                        Thread.sleep(1000); // Tick toutes les secondes
+                    }
+                    
+                    if (!isRunning || gameOver) break;
+                    
+                    // Zone capturée — notifier reset et attendre avant respawn
+                    broadcastToAll(gameServer, Protocol.buildMessage(Protocol.MSG_ZONE_RESET));
+                    if (hostArena != null) {
+                        hostArena.setCaptureZone(null);
+                    }
+                    currentZone = null;
+                    
+                    Thread.sleep(Protocol.ZONE_RESPAWN_DELAY_MS);
+                }
+            } catch (InterruptedException e) {
+                System.out.println("Thread capture de zone interrompu");
+            }
+        }, "CaptureZone-Thread");
+        captureZoneThread.setDaemon(true);
+        captureZoneThread.start();
+        System.out.println("✓ Système de capture de zone démarré");
+    }
+
+    private static void spawnNewZone(GameServer gameServer) {
+        int maxX = Protocol.ARENA_WIDTH - Protocol.ZONE_SIZE;
+        int maxY = Protocol.ARENA_HEIGHT - Protocol.ZONE_SIZE;
+        int zoneX = random.nextInt(Math.max(1, maxX));
+        int zoneY = random.nextInt(Math.max(1, maxY));
+        
+        currentZone = new CaptureZone(zoneX, zoneY, Protocol.ZONE_SIZE, Protocol.ZONE_SIZE);
+        
+        System.out.println("✦ Zone de capture apparue à (" + zoneX + ", " + zoneY + ")");
+        
+        // Notifier tous les clients
+        String spawnMsg = Protocol.buildMessage(
+            Protocol.MSG_ZONE_SPAWN,
+            String.valueOf(zoneX),
+            String.valueOf(zoneY),
+            String.valueOf(Protocol.ZONE_SIZE),
+            String.valueOf(Protocol.ZONE_SIZE)
+        );
+        broadcastToAll(gameServer, spawnMsg);
+        
+        // Mettre à jour l'arène de l'hôte
+        if (hostArena != null) {
+            hostArena.setCaptureZone(currentZone);
+        }
+    }
+
+    // Verrou pour synchroniser l'accès à la zone de capture
+    private static final Object zoneLock = new Object();
+    
+    /*Tick de capture : vérifie quels joueurs sont dans la zone et met à jour la progression.*/
+    private static void captureZoneTick(GameServer gameServer) {
+        synchronized (zoneLock) {
+        if (currentZone == null || !currentZone.isActive() || currentZone.isCaptured()) return;
+        
+        // Trouver les joueurs dans la zone
+        java.util.List<Client> playersInZone = new java.util.ArrayList<>();
+        
+        for (Client client : new java.util.ArrayList<>(gameServer.getclients())) {
+            Joueur j = client.getJoueur();
+            if (j != null && currentZone.containsPlayer(j.getX(), j.getY(), Protocol.PLAYER_SIZE)) {
+                playersInZone.add(client);
+            }
+        }
+        
+        int currentCapturerId = currentZone.getCapturingPlayerId();
+        
+        if (!playersInZone.isEmpty()) {
+            // Vérifier si le joueur qui capture est toujours dans la zone
+            boolean currentCapturerStillInZone = false;
+            for (Client c : playersInZone) {
+                if (c.getJoueur().getid() == currentCapturerId) {
+                    currentCapturerStillInZone = true;
+                    break;
+                }
+            }
+            
+            if (currentCapturerId != -1 && currentCapturerStillInZone) {
+                // Le joueur qui capture est toujours là — continuer la progression
+                double increment = 1.0 / Protocol.CAPTURE_TIME_SECONDS;
+                double newProgress = Math.min(1.0, currentZone.getCaptureProgress() + increment);
+                currentZone.setCaptureProgress(newProgress);
+                
+                System.out.println("⏳ " + currentZone.getCapturingPlayerName() + " capture: " + (int)(newProgress * 100) + "%");
+                
+                if (newProgress >= 1.0) {
+                    // Zone capturée !
+                    currentZone.setCaptured(true);
+                    currentZone.setActive(false);
+                    String winnerName = currentZone.getCapturingPlayerName();
+                    int winnerId = currentZone.getCapturingPlayerId();
+                    System.out.println("🏆 " + winnerName + " a capturé la zone !");
+                    
+                    // Incrémenter le score du joueur
+                    for (Client c : gameServer.getclients()) {
+                        if (c.getJoueur() != null && c.getJoueur().getid() == winnerId) {
+                            c.getJoueur().setScore(c.getJoueur().getScore() + 1);
+                            break;
+                        }
+                    }
+                    
+                    // Broadcaster les scores mis à jour
+                    broadcastScores(gameServer);
+                    
+                    String capturedMsg = Protocol.buildMessage(
+                        Protocol.MSG_ZONE_CAPTURED,
+                        String.valueOf(winnerId),
+                        winnerName
+                    );
+                    broadcastToAll(gameServer, capturedMsg);
+                    
+                    if (hostArena != null) {
+                        hostArena.showCaptureVictory(winnerName);
+                    }
+                    
+                    // Vérifier si le joueur a atteint le score cible
+                    for (Client c : gameServer.getclients()) {
+                        if (c.getJoueur() != null && c.getJoueur().getid() == winnerId) {
+                            if (c.getJoueur().getScore() >= Protocol.SCORE_TO_WIN) {
+                                // Victoire finale !
+                                gameOver = true;
+                                System.out.println("🏆🏆 " + winnerName + " a gagné la partie avec " + c.getJoueur().getScore() + " points !");
+                                String gameWonMsg = Protocol.buildMessage(
+                                    Protocol.MSG_GAME_WON,
+                                    String.valueOf(winnerId),
+                                    winnerName,
+                                    String.valueOf(c.getJoueur().getScore())
+                                );
+                                broadcastToAll(gameServer, gameWonMsg);
+                                
+                                if (hostArena != null) {
+                                    hostArena.showGameWon(winnerName, c.getJoueur().getScore());
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    return;
+                }
+            } else {
+                // Personne ne capture encore, ou le captureur est parti — le premier joueur dans la zone prend le relais
+                Client firstPlayer = playersInZone.get(0);
+                Joueur j = firstPlayer.getJoueur();
+                
+                if (currentCapturerId == -1) {
+                    // Personne ne capturait — nouveau début
+                    currentZone.setCapturingPlayerId(j.getid());
+                    currentZone.setCapturingPlayerName(j.getPseudo());
+                    currentZone.setCaptureProgress(1.0 / Protocol.CAPTURE_TIME_SECONDS);
+                    System.out.println("⏳ " + j.getPseudo() + " commence la capture");
+                } else {
+                    // Le captureur précédent a quitté la zone — reset et nouveau début
+                    System.out.println("✗ " + currentZone.getCapturingPlayerName() + " a quitté la zone");
+                    currentZone.setCapturingPlayerId(j.getid());
+                    currentZone.setCapturingPlayerName(j.getPseudo());
+                    currentZone.setCaptureProgress(1.0 / Protocol.CAPTURE_TIME_SECONDS);
+                    System.out.println("⏳ " + j.getPseudo() + " commence la capture");
+                }
+            }
+        } else {
+            // Personne dans la zone — la progression se réinitialise
+            if (currentZone.getCapturingPlayerId() != -1) {
+                System.out.println("✗ " + currentZone.getCapturingPlayerName() + " a quitté la zone");
+                currentZone.resetCapture();
+            }
+        }
+        
+        // Envoyer la mise à jour à tous
+        String updateMsg = Protocol.buildMessage(
+            Protocol.MSG_ZONE_UPDATE,
+            String.valueOf(currentZone.getCapturingPlayerId()),
+            currentZone.getCapturingPlayerName().isEmpty() ? "none" : currentZone.getCapturingPlayerName(),
+            String.valueOf(currentZone.getCaptureProgress())
+        );
+        broadcastToAll(gameServer, updateMsg);
+        
+        // Mettre à jour l'arène de l'hôte
+        if (hostArena != null) {
+            hostArena.setCaptureZone(currentZone);
+        }
+        } // fin synchronized
+    }
+
+    /*Envoie un message à tous les clients connectés (sockets réseau uniquement, pas l'hôte).*/
+    private static void broadcastToAll(GameServer gameServer, String message) {
+        for (Client client : new java.util.ArrayList<>(gameServer.getclients())) {
+            if (client.getSocket() != null) {
+                client.send(message);
+            }
+        }
+    }
+
+    /*Envoie les scores de tous les joueurs à tous les clients.*/
+    public static void broadcastScores(GameServer gameServer) {
+        StringBuilder sb = new StringBuilder(Protocol.MSG_SCORE_UPDATE);
+        for (Client client : new java.util.ArrayList<>(gameServer.getclients())) {
+            Joueur j = client.getJoueur();
+            if (j != null) {
+                sb.append(Protocol.SEPARATOR).append(j.getid());
+                sb.append(Protocol.SEPARATOR).append(j.getPseudo());
+                sb.append(Protocol.SEPARATOR).append(j.getScore());
+            }
+        }
+        sb.append(Protocol.END_MESSAGE);
+        String msg = sb.toString();
+        broadcastToAll(gameServer, msg);
+        
+        // Mettre à jour l'arène de l'hôte aussi
+        if (hostArena != null) {
+            hostArena.updateScores(gameServer);
+        }
+    }
+
+    /*Arrête le système de capture de zone.*/
+    public static void stopCaptureZone() {
+        if (captureZoneThread != null) {
+            captureZoneThread.interrupt();
+            captureZoneThread = null;
+        }
+        currentZone = null;
+        System.out.println("✓ Système de capture de zone arrêté");
     }
 }

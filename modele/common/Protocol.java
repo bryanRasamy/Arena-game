@@ -23,6 +23,13 @@ public class Protocol {
     public static final int PLAYER_SIZE = 20;
     public static final float PLAYER_SPEED = 5.0f;
     
+    // Zone de capture
+    public static final int ZONE_SIZE = 100;             // Taille de la zone (carré)
+    public static final int CAPTURE_TIME_SECONDS = 10;   // Temps pour capturer la zone
+    public static final int ZONE_SPAWN_DELAY_MS = 3000;  // Délai avant apparition de la première zone
+    public static final int ZONE_RESPAWN_DELAY_MS = 5000; // Délai avant réapparition après capture
+    public static int SCORE_TO_WIN = 3;                   // Score à atteindre pour gagner (modifiable)
+    
     /*TYPES DE MESSAGES*/
     // Client -> Serveur
     public static final String MSG_CONNECT = "CONNECT";      // Connexion initiale
@@ -39,6 +46,12 @@ public class Protocol {
     public static final String MSG_ERROR = "ERROR";          // Erreur
     public static final String MSG_SERVER_FULL = "SERVER_FULL"; // Serveur plein
     public static final String MSG_SERVER_STOP = "SERVER_STOP"; // Serveur arrêté
+    public static final String MSG_ZONE_SPAWN = "ZONE_SPAWN";   // Nouvelle zone: ZONE_SPAWN|x|y|w|h
+    public static final String MSG_ZONE_UPDATE = "ZONE_UPD";    // Mise à jour: ZONE_UPD|capturingId|pseudo|progress
+    public static final String MSG_ZONE_CAPTURED = "ZONE_CAP";  // Capturée: ZONE_CAP|winnerId|pseudo
+    public static final String MSG_ZONE_RESET = "ZONE_RST";     // Zone disparaît avant respawn
+    public static final String MSG_GAME_WON = "GAME_WON";      // Victoire finale: GAME_WON|winnerId|pseudo|score
+    public static final String MSG_SCORE_UPDATE = "SCORE_UPD";  // Score: SCORE_UPD|id1|pseudo1|score1|id2|pseudo2|score2|...
     
     // Bidirectionnel
     public static final String MSG_MOVE = "MOVE";            // Mouvement joueur: MOVE|id|x|y

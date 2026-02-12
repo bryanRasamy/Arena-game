@@ -12,6 +12,7 @@ public class Hostform extends JPanel {
     private MainFrame parentFrame;
     private JTextField txtPseudo;
     private JSpinner spinMaxPlayers;
+    private JSpinner spinScoreTarget;
     private JButton btnStart;
     private JButton btnBack;
 
@@ -57,8 +58,19 @@ public class Hostform extends JPanel {
         ((JSpinner.DefaultEditor) spinMaxPlayers.getEditor()).getTextField().setEditable(false);
         formPanel.add(spinMaxPlayers, gbc);
 
+        // Score cible
+        gbc.gridx = 0; gbc.gridy = 3;
+        formPanel.add(createLabel("Score pour gagner :"), gbc);
+        
+        gbc.gridx = 1;
+        SpinnerNumberModel scoreModel = new SpinnerNumberModel(Protocol.SCORE_TO_WIN, 1, 100, 1);
+        spinScoreTarget = new JSpinner(scoreModel);
+        spinScoreTarget.setFont(new Font("Arial", Font.PLAIN, 14));
+        ((JSpinner.DefaultEditor) spinScoreTarget.getEditor()).getTextField().setEditable(false);
+        formPanel.add(spinScoreTarget, gbc);
+
         // Info port (non modifiable)
-        gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2;
+        gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2;
         JLabel portInfo = new JLabel("Port utilisé : " + Protocol.SERVER_PORT + " (par défaut)", JLabel.CENTER);
         portInfo.setFont(new Font("Arial", Font.ITALIC, 12));
         portInfo.setForeground(new Color(150, 150, 150));
@@ -121,6 +133,7 @@ public class Hostform extends JPanel {
         String pseudo = txtPseudo.getText().trim();
         
         int maxPlayers = (int) spinMaxPlayers.getValue();
+        int scoreTarget = (int) spinScoreTarget.getValue();
 
         // Validation
         if (pseudo.isEmpty()) {
@@ -130,6 +143,9 @@ public class Hostform extends JPanel {
                 JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        // Appliquer le score cible
+        Protocol.SCORE_TO_WIN = scoreTarget;
 
         // Création et démarrage du serveur
         GameServer server = ServerService.createServer();

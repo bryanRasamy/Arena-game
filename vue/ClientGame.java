@@ -104,6 +104,24 @@ public class ClientGame extends JPanel {
                         
                         // Connecter l'arène au réseau pour envoyer les mouvements
                         arenaPanel.setNetworkClient(client);
+                        
+                        // Timer de rafraîchissement périodique de l'arène
+                        javax.swing.Timer refreshTimer = new javax.swing.Timer(100, ev -> {
+                            arenaPanel.repaint();
+                        });
+                        refreshTimer.start();
+                        
+                        // Callback victoire finale : retour au menu
+                        arenaPanel.setOnGameWon(() -> {
+                            if (client != null) {
+                                client.stop();
+                                client.close();
+                            }
+                            parentFrame.getContentPane().removeAll();
+                            parentFrame.add(new MainPanel(parentFrame), BorderLayout.CENTER);
+                            parentFrame.revalidate();
+                            parentFrame.repaint();
+                        });
                     });
                     
                     // Callback si le serveur s'arrête

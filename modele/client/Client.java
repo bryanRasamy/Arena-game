@@ -5,6 +5,7 @@ import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
 import modele.common.Protocol;
+import modele.common.CaptureZone;
 import modele.server.*;
 import vue.Arena;
 
@@ -57,6 +58,11 @@ public class Client implements Runnable{
         return socket;
     }
 
+    /*Lit une ligne depuis le flux d'entrée du client.*/
+    public String readLine() throws IOException {
+        return in != null ? in.readLine() : null;
+    }
+
     public GameServer getServer() {
         return server;
     }
@@ -93,6 +99,9 @@ public class Client implements Runnable{
             
             // Côté serveur : notifier les autres que ce joueur est parti
             if (server != null && joueur != null) {
+                // Retirer le client de la liste AVANT de broadcaster
+                server.getclients().remove(this);
+                
                 String leftMsg = Protocol.buildMessage(Protocol.MSG_PLAYER_LEFT, String.valueOf(joueur.getid()));
                 for (Client c : new java.util.ArrayList<>(server.getclients())) {
                     if (c != this && c.getSocket() != null) {
@@ -104,12 +113,22 @@ public class Client implements Runnable{
                     hostArena.removeJoueur(joueur.getid());
                 }
                 System.out.println("✓ Joueur déconnecté: " + joueur.getPseudo() + " (ID: " + joueur.getid() + ")");
+                
+                // Broadcaster les scores mis à jour (sans le joueur parti)
+                service.ServerService.broadcastScores(server);
             }
             
             // Côté client : déclencher le callback de déconnexion
             triggerDisconnect();
             
-            close();
+            // Fermer la socket (sans re-retirer de la liste)
+            try {
+                if (socket != null && !socket.isClosed()) {
+                    socket.close();
+                }
+            } catch (IOException ex) {
+                System.err.println("✗ Erreur lors de la fermeture: " + ex.getMessage());
+            }
         }
     }
 
@@ -180,6 +199,61 @@ public class Client implements Runnable{
                 running = false;
                 triggerDisconnect();
                 break;
+            
+            case Protocol.MSG_ZONE_SPAWN:
+                // Format: ZONE_SPAWN|x|y|w|h
+                if (parts.length >= 5) {
+                    CaptureZone zone = new CaptureZone(
+                        Integer.parseInt(parts[1]),
+                        Integer.parseInt(parts[2]),
+                        Integer.parseInt(parts[3]),
+                        Integer.parseInt(parts[4])
+                    );
+                    arena.setCaptureZone(zone);
+                    System.out.println("✦ Zone de capture reçue");
+                }
+                break;
+            
+            case Protocol.MSG_ZONE_UPDATE:
+                // Format: ZONE_UPD|capturingId|pseudo|progress
+                if (parts.length >= 4 && arena.getCaptureZone() != null) {
+                    CaptureZone z = arena.getCaptureZone();
+                    z.setCapturingPlayerId(Integer.parseInt(parts[1]));
+                    z.setCapturingPlayerName("none".equals(parts[2]) ? "" : parts[2]);
+                    z.setCaptureProgress(Double.parseDouble(parts[3]));
+                    arena.repaint();
+                }
+                break;
+            
+            case Protocol.MSG_ZONE_CAPTURED:
+                // Format: ZONE_CAP|winnerId|pseudo
+                if (parts.length >= 3) {
+                    String winnerName = parts[2];
+                    arena.showCaptureVictory(winnerName);
+                    System.out.println(winnerName + " a capturé la zone !");
+                }
+                break;
+            
+            case Protocol.MSG_ZONE_RESET:
+                // La zone disparaît
+                arena.setCaptureZone(null);
+                System.out.println("○ Zone de capture retirée");
+                break;
+            
+            case Protocol.MSG_SCORE_UPDATE:
+                // Format: SCORE_UPD|id1|pseudo1|score1|id2|pseudo2|score2|...
+                arena.updateScoresFromMessage(parts);
+                break;
+            
+            case Protocol.MSG_GAME_WON:
+                // Format: GAME_WON|winnerId|pseudo|score
+                if (parts.length >= 4) {
+                    String winnerName = parts[2];
+                    int winnerScore = Integer.parseInt(parts[3]);
+                    arena.showGameWon(winnerName, winnerScore);
+                    System.out.println("🏆🏆 " + winnerName + " a gagné la partie !");
+                }
+                break;
                 
             case Protocol.MSG_ERROR:
                 if (parts.length >= 2) {
@@ -244,7 +318,7 @@ public class Client implements Runnable{
     /*Broadcast un message à tous les autres clients (côté serveur)*/
     private void broadcastMessage(String message) {
         if (server != null) {
-            for (Client client : server.getclients()) {
+            for (Client client : new java.util.ArrayList<>(server.getclients())) {
                 if (client != this && client.getSocket() != null) {
                     client.send(message);
                 }

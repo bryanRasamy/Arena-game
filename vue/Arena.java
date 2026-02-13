@@ -683,7 +683,6 @@ public class Arena extends JPanel {
     public void removeJoueur(int id) {
         synchronized (joueurs) {
             joueurs.removeIf(j -> j.getid() == id);
-            // Retirer aussi du tableau des scores
             playerScores.remove(id);
             playerNames.remove(id);
             System.out.println("✓ Joueur retiré: ID " + id);

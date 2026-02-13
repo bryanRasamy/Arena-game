@@ -109,21 +109,7 @@ public class HostGame extends JPanel {
         statsPanel.setBackground(panel.getBackground());
         statsPanel.setBorder(BorderFactory.createEmptyBorder(15, 0, 15, 0));
 
-        JLabel statsTitle = new JLabel("Statistiques:");
-        statsTitle.setFont(new Font("Arial", Font.BOLD, 13));
-        statsTitle.setForeground(Color.WHITE);
-        statsTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        JLabel lblUptime = createSmallInfoLabel("Temps: 0:00");
-        JLabel lblPing = createSmallInfoLabel("Ping moyen: -- ms");
-        JLabel lblPackets = createSmallInfoLabel("Paquets: 0");
-
-        statsPanel.add(statsTitle);
-        statsPanel.add(Box.createRigidArea(new Dimension(0, 5)));
-        statsPanel.add(lblUptime);
-        statsPanel.add(lblPing);
-        statsPanel.add(lblPackets);
-
+       
         // Bouton arrêter
         btnStopServer = new JButton("⚠ ARRÊTER LE SERVEUR");
         btnStopServer.setFocusPainted(false);
@@ -160,14 +146,6 @@ public class HostGame extends JPanel {
         JLabel label = new JLabel(text);
         label.setFont(new Font("Arial", Font.PLAIN, 13));
         label.setForeground(Color.WHITE);
-        label.setAlignmentX(Component.LEFT_ALIGNMENT);
-        return label;
-    }
-
-    private JLabel createSmallInfoLabel(String text) {
-        JLabel label = new JLabel(text);
-        label.setFont(new Font("Arial", Font.PLAIN, 11));
-        label.setForeground(new Color(180, 180, 180));
         label.setAlignmentX(Component.LEFT_ALIGNMENT);
         return label;
     }

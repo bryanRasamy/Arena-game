@@ -19,6 +19,8 @@ public class Client implements Runnable{
     private boolean running;
     private Runnable onDisconnected = null;
     private volatile boolean disconnectHandled = false;
+    private static Arena hostArena = null; // Référence à l'arène de l'hôte (pour la mise à jour visuelle côté serveur)
+    
     
     public Client(Arena arena) {
         this.arena = arena;
@@ -39,6 +41,10 @@ public class Client implements Runnable{
             System.err.println("✗ Erreur lors de la création des flux: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    public static void setHostArena(Arena arena) {
+        hostArena = arena;
     }
     
     public void setServer(GameServer server) {
@@ -265,13 +271,6 @@ public class Client implements Runnable{
                 System.out.println("⚠ Message non géré: " + messageType);
                 break;
         }
-    }
-
-    // Référence à l'arène de l'hôte (pour la mise à jour visuelle côté serveur)
-    private static Arena hostArena = null;
-    
-    public static void setHostArena(Arena arena) {
-        hostArena = arena;
     }
     
     /*Traite les messages reçus d'un client (côté serveur)*/

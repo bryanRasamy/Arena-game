@@ -396,7 +396,7 @@ public class ServerService {
             String name = ni.getName().toLowerCase();
             String displayName = ni.getDisplayName().toLowerCase();
             
-            // Ignorer docker, veth, virtual, loopback👉
+            // Ignorer docker, veth, virtual, loopback
             if (name.contains("docker") || name.contains("veth") || name.contains("br-") || name.contains("vboxnet") || displayName.contains("virtual") || displayName.contains("loopback")) {
                 continue;
             }
